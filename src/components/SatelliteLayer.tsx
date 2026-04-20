@@ -50,14 +50,17 @@ import {
 } from '../lib/propagator'
 import { tleMetadata } from '../lib/tleMetadata'
 import { useSelectionStore } from '../stores/selection'
+import {
+  BAND_COLORS,
+  BAND_ORBIT_COLORS,
+  bandIndexForInclinationDeg,
+} from '../lib/inclinationColor'
 
 const TICK_MS = 1000
 const ORBIT_SAMPLES = 100
 
-const DEFAULT_COLOR = Color.WHITE.withAlpha(0.8)
 const SELECTED_COLOR = Color.fromCssColorString('#00d4ff')
 const SELECTED_OUTLINE = Color.fromCssColorString('#00d4ff').withAlpha(0.5)
-const ORBIT_COLOR = Color.fromCssColorString('#00d4ff').withAlpha(0.6)
 
 const DEFAULT_SIZE = 3
 const SELECTED_SIZE = 8
@@ -93,6 +96,14 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
 
     const N = satellites.length
     const satrecs = satellites.map((s) => tleToSatRec(s.tle))
+    // Classify each satellite into an inclination band once at mount.
+    // SatRec.inclo is radians; convert and clamp to [0, 180].
+    const bandIndex = new Uint8Array(N)
+    for (let i = 0; i < N; i++) {
+      const deg = Math.abs((satrecs[i].inclo * 180) / Math.PI) % 360
+      const folded = deg > 180 ? 360 - deg : deg
+      bandIndex[i] = bandIndexForInclinationDeg(folded)
+    }
 
     // --- Point collection ------------------------------------------------
     const points_ = new PointPrimitiveCollection()
@@ -108,7 +119,7 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       const p = points_.add({
         position: origin,
         pixelSize: DEFAULT_SIZE,
-        color: DEFAULT_COLOR,
+        color: BAND_COLORS[bandIndex[i]],
         outlineWidth: DEFAULT_OUTLINE_WIDTH,
         scaleByDistance: POINT_SCALE_BY_DISTANCE,
         show: false,
@@ -230,7 +241,9 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
         polyline: {
           positions,
           width: 1.5,
-          material: ORBIT_COLOR,
+          // Orbit color matches the satellite's inclination band, slightly
+          // brighter than the point itself so it reads as "related, active".
+          material: BAND_ORBIT_COLORS[bandIndex[idx]],
           // Straight 3D segments between our ECEF samples (not geodesic
           // great-circles on the surface) — this is the actual orbit shape.
           arcType: ArcType.NONE,
@@ -254,7 +267,8 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     const applySelection = (noradId: number | null) => {
       if (currentHighlight != null && points[currentHighlight]) {
         const prevP = points[currentHighlight]
-        prevP.color = DEFAULT_COLOR
+        // Restore the previous satellite's inclination-band color.
+        prevP.color = BAND_COLORS[bandIndex[currentHighlight]]
         prevP.pixelSize = DEFAULT_SIZE
         prevP.outlineWidth = DEFAULT_OUTLINE_WIDTH
       }

@@ -13,6 +13,7 @@ import type { Satellite } from '../types/satellite'
 import { useChat, MAX_QUESTION_CHARS } from '../hooks/useChat'
 import { useSelectedNoradId } from '../hooks/useSelectedSatellite'
 import type { ChatMessage, ChatErrorKind } from '../types/chat'
+import { useUIStore } from '../stores/ui'
 
 interface ChatPanelProps {
   catalog: Satellite[] | undefined
@@ -52,6 +53,7 @@ export function ChatPanel({ catalog }: ChatPanelProps) {
     const value = (text ?? draft).trim()
     if (!value || isSending) return
     setDraft('')
+    useUIStore.getState().markInteracted()
     void sendMessage(value)
   }
 
