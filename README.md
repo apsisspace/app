@@ -32,12 +32,27 @@ Get a free token at <https://ion.cesium.com/> → Access Tokens. Without it, Aps
 
 ## Features (v2)
 
-- Loads Celestrak's **active** catalog (~10,000 satellites) on startup.
+- Loads Celestrak's **active** catalog (~10,000 satellites) on startup, via a Vercel Edge proxy + localStorage cache (see Data flow below).
 - All satellites propagated client-side (SGP4) once per second and rendered as a single Cesium `PointPrimitiveCollection` for throughput.
 - Cesium `requestRenderMode` is on — idle GPU usage is effectively zero between ticks.
 - **Click** any satellite to open a side panel with name, NORAD ID, COSPAR ID, orbital period, inclination, and TLE epoch.
 - **Search** by name in the top-center input; Enter (or click a result) highlights the satellite in teal and flies the camera to it.
+- Selecting a satellite hands the camera to Cesium's `trackedEntity` mode — zoom/orbit are relative to the satellite, and the camera follows it through its orbit.
 - Selected state lives in a Zustand store; the point layer subscribes imperatively so selection changes never trigger a React re-render of the globe.
+
+## Data flow
+
+```
+browser ──► localStorage cache (1 h TTL) ──► /api/catalog ──► Celestrak
+                ▲                                ▲                │
+                └────── write on success ────────┘                │
+                                 stale fallback ◄──── 1 h memory cache
+```
+
+- Browsers can't set `User-Agent` on `fetch()`, and Celestrak 403s default UAs, so the client never hits Celestrak directly. Instead:
+- `api/catalog.ts` is a Vercel Edge Function that fetches Celestrak with a proper User-Agent, caches the response in-memory for 1 h per isolate, and falls back to the last-successful response on upstream error (including 403).
+- The client first checks a localStorage cache (1 h TTL). Only on miss/stale does it call `/api/catalog`. This keeps Celestrak load near-minimal at any scale.
+- In local dev (`npm run dev`), the same Edge Function is served through a small Vite middleware plugin — no `vercel dev` required.
 
 ## Roadmap
 
@@ -49,6 +64,9 @@ Get a free token at <https://ion.cesium.com/> → Access Tokens. Without it, Aps
 ## Project layout
 
 ```
+api/
+  catalog.ts               Vercel Edge Function — Celestrak proxy + cache
+
 src/
   components/
     Globe.tsx              CesiumJS viewer wrapper (requestRenderMode on)
@@ -56,10 +74,11 @@ src/
     SearchBar.tsx          Top search input
     SidePanel.tsx          Right-side selected-satellite detail
   hooks/
-    useSatelliteCatalog.ts TanStack Query — active catalog TLEs
+    useSatelliteCatalog.ts TanStack Query — /api/catalog + localStorage
     useSelectedSatellite.ts Zustand-backed selection hooks
   lib/
-    celestrak.ts           TLE fetch + parse (single + group)
+    catalogCache.ts        localStorage read/write for the TLE blob
+    celestrak.ts           TLE parse (client-side) + legacy direct fetchers
     propagator.ts          satellite.js wrapper (SGP4 → geodetic)
     tleMetadata.ts         Derive COSPAR / period / inclination / epoch
   stores/

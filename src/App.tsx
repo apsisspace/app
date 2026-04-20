@@ -13,9 +13,20 @@ import {
 //   20 queries/day per IP, $5/day global budget cap).
 
 function App() {
-  const { data: catalog, isLoading, isError, error } = useSatelliteCatalog()
+  const { data: catalog, isPending, failureCount } = useSatelliteCatalog()
   const selectedNoradId = useSelectedNoradId()
   const selected = catalog ? findSelected(catalog, selectedNoradId) : null
+
+  // We retry indefinitely, so the query never settles into a terminal error
+  // state. failureCount lets us distinguish first load vs. stuck retrying.
+  let statusText: string | null = null
+  if (catalog) {
+    statusText = `${catalog.length.toLocaleString()} satellites`
+  } else if (isPending && failureCount === 0) {
+    statusText = 'Loading active catalog…'
+  } else if (isPending) {
+    statusText = "Couldn't load the satellite catalog. Retrying in a moment…"
+  }
 
   return (
     <div className="relative h-full w-full">
@@ -29,9 +40,7 @@ function App() {
           Apsis Space
         </h1>
         <p className="text-[10px] uppercase tracking-widest text-white/50">
-          {isLoading && 'Loading active catalog…'}
-          {isError && `Catalog error: ${(error as Error).message}`}
-          {catalog && `${catalog.length.toLocaleString()} satellites`}
+          {statusText}
         </p>
       </header>
 
