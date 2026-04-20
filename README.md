@@ -40,6 +40,19 @@ Get a free token at <https://ion.cesium.com/> → Access Tokens. Without it, Aps
 - Selecting a satellite hands the camera to Cesium's `trackedEntity` mode — zoom/orbit are relative to the satellite, and the camera follows it through its orbit.
 - Selected state lives in a Zustand store; the point layer subscribes imperatively so selection changes never trigger a React re-render of the globe.
 
+## Features (v3 — AI layer)
+
+- **Ask Apsis**, a bottom-right chat panel, answers plain-English questions about satellites, orbits, and the catalog via **Claude Haiku 4.5**.
+- If a satellite is selected when you ask, its NORAD ID, inclination, period, and TLE epoch are injected as context on that turn — so "what's this satellite's altitude range?" just works.
+- Strict abuse controls baked in server-side:
+  - **20 questions per IP per UTC day.**
+  - **$5 global budget per UTC day.** Budget is pre-checked (worst-case) before we spend, and the actual spend is recorded after.
+  - Both counters live in Upstash Redis (REST), keyed `ratelimit:<ip>:<YYYYMMDD>` and `budget:<YYYYMMDD>`, with an `EXPIRE` to UTC midnight so keys clean up on their own.
+- Input validation on both client and server: max 500 chars, control-character stripped, empty/whitespace rejected.
+- Distinct client-side error states for `daily_limit_reached` (429), `daily_budget_reached` (503), validation (400), and network errors.
+- System prompt is prompt-cached (`cache_control: ephemeral`); the volatile UTC timestamp is sent as a separate system block so it doesn't invalidate the cache.
+- Chat state is local/ephemeral — nothing persists across reloads yet. Chat never triggers Cesium re-renders (the panel sits as a sibling of the globe).
+
 ## Data flow
 
 ```
@@ -47,33 +60,49 @@ browser ──► localStorage cache (1 h TTL) ──► /api/catalog ──► 
                 ▲                                ▲                │
                 └────── write on success ────────┘                │
                                  stale fallback ◄──── 1 h memory cache
+
+browser ──► POST /api/query ──► Upstash Redis (per-IP + global)
+                                    │
+                                    ├── pre-check: IP count, daily $ budget
+                                    │
+                                    ▼
+                               Anthropic (Claude Haiku 4.5)
+                                    │
+                                    ├── record actual $ spend (INCRBYFLOAT)
+                                    │
+                                    ▼
+                                 { answer }
 ```
 
 - Browsers can't set `User-Agent` on `fetch()`, and Celestrak 403s default UAs, so the client never hits Celestrak directly. Instead:
 - `api/catalog.ts` is a Vercel Edge Function that fetches Celestrak with a proper User-Agent, caches the response in-memory for 1 h per isolate, and falls back to the last-successful response on upstream error (including 403).
 - The client first checks a localStorage cache (1 h TTL). Only on miss/stale does it call `/api/catalog`. This keeps Celestrak load near-minimal at any scale.
-- In local dev (`npm run dev`), the same Edge Function is served through a small Vite middleware plugin — no `vercel dev` required.
+- `api/query.ts` is a second Vercel Edge Function that owns the Anthropic key (never exposed to the browser), gates each request against both rate counters, calls Claude Haiku, and returns just `{ answer }` or a typed error.
+- In local dev (`npm run dev`), both Edge Functions are served through a small Vite middleware plugin — no `vercel dev` required.
 
 ## Roadmap
 
 - **v1 — ISS demo.** 3D Earth + one satellite propagated client-side and rendered live. ✓
 - **v2 — Full catalog (current milestone).** Celestrak active group, point-primitive rendering, click-to-inspect, search-to-focus. ✓
-- **v3 — AI layer.** "Is the ISS visible from Berlin tonight?" / "What's that bright thing?" — answered via Claude Haiku behind a Vercel Edge Function proxy with per-IP and global rate/budget caps.
-- **v4 — Pro tier.** User accounts, saved views, higher query limits, premium imagery/terrain via Cesium ion. Possibly server-side propagation for larger catalogs and pass predictions.
+- **v3 — AI layer (current milestone).** "What's this satellite for?" / "What's a sun-synchronous orbit?" — answered via Claude Haiku behind a Vercel Edge Function with per-IP (20/day) and global ($5/day) caps. ✓
+- **v4 — Pro tier.** User accounts, saved views, higher query limits, premium imagery/terrain via Cesium ion. Possibly server-side propagation for larger catalogs and pass predictions. Live visibility predictions (they need the user's location and time, which we don't have yet).
 
 ## Project layout
 
 ```
 api/
   catalog.ts               Vercel Edge Function — Celestrak proxy + cache
+  query.ts                 Vercel Edge Function — Claude Haiku + rate limits
 
 src/
   components/
+    ChatPanel.tsx          Bottom-right Ask Apsis chat panel
     Globe.tsx              CesiumJS viewer wrapper (requestRenderMode on)
     SatelliteLayer.tsx     PointPrimitiveCollection + 1 Hz batch propagate
     SearchBar.tsx          Top search input
     SidePanel.tsx          Right-side selected-satellite detail
   hooks/
+    useChat.ts             Chat state + POST /api/query with selection ctx
     useSatelliteCatalog.ts TanStack Query — /api/catalog + localStorage
     useSelectedSatellite.ts Zustand-backed selection hooks
   lib/
@@ -84,6 +113,7 @@ src/
   stores/
     selection.ts           Zustand store for current selection
   types/
+    chat.ts                Chat message + error shapes
     satellite.ts           TLE / position / Satellite types
   App.tsx
   main.tsx

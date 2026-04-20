@@ -1,3 +1,4 @@
+import { ChatPanel } from './components/ChatPanel'
 import { Globe } from './components/Globe'
 import { SatelliteLayer } from './components/SatelliteLayer'
 import { SearchBar } from './components/SearchBar'
@@ -9,8 +10,6 @@ import {
 } from './hooks/useSelectedSatellite'
 
 // TODO(auth): Add user accounts and pro tier gating.
-// TODO(ai): Add AI query layer (Claude Haiku via Vercel Edge Function proxy,
-//   20 queries/day per IP, $5/day global budget cap).
 
 function App() {
   const { data: catalog, isPending, failureCount } = useSatelliteCatalog()
@@ -55,6 +54,9 @@ function App() {
           <SidePanel satellite={selected} />
         </div>
       )}
+
+      {/* Bottom-right AI chat — independent from the Cesium tree */}
+      <ChatPanel catalog={catalog} />
     </div>
   )
 }
