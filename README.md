@@ -30,27 +30,42 @@ Get a free token at <https://ion.cesium.com/> → Access Tokens. Without it, Aps
 - **Zustand** — client state (to be added when needed)
 - Target deploy: **Vercel** (Edge Functions for the future AI proxy)
 
+## Features (v2)
+
+- Loads Celestrak's **active** catalog (~10,000 satellites) on startup.
+- All satellites propagated client-side (SGP4) once per second and rendered as a single Cesium `PointPrimitiveCollection` for throughput.
+- Cesium `requestRenderMode` is on — idle GPU usage is effectively zero between ticks.
+- **Click** any satellite to open a side panel with name, NORAD ID, COSPAR ID, orbital period, inclination, and TLE epoch.
+- **Search** by name in the top-center input; Enter (or click a result) highlights the satellite in teal and flies the camera to it.
+- Selected state lives in a Zustand store; the point layer subscribes imperatively so selection changes never trigger a React re-render of the globe.
+
 ## Roadmap
 
-- **v1 — ISS demo (this milestone).** 3D Earth + one satellite propagated client-side and rendered live.
-- **v2 — Full catalog.** Pull the active catalog from Celestrak, render with LOD / point primitives, add pick-to-inspect and pass predictions. Likely move propagation server-side for scale.
+- **v1 — ISS demo.** 3D Earth + one satellite propagated client-side and rendered live. ✓
+- **v2 — Full catalog (current milestone).** Celestrak active group, point-primitive rendering, click-to-inspect, search-to-focus. ✓
 - **v3 — AI layer.** "Is the ISS visible from Berlin tonight?" / "What's that bright thing?" — answered via Claude Haiku behind a Vercel Edge Function proxy with per-IP and global rate/budget caps.
-- **v4 — Pro tier.** User accounts, saved views, higher query limits, premium imagery/terrain via Cesium ion.
+- **v4 — Pro tier.** User accounts, saved views, higher query limits, premium imagery/terrain via Cesium ion. Possibly server-side propagation for larger catalogs and pass predictions.
 
 ## Project layout
 
 ```
 src/
   components/
-    Globe.tsx           CesiumJS viewer wrapper
-    SatelliteLayer.tsx  Renders satellites as animated entities
+    Globe.tsx              CesiumJS viewer wrapper (requestRenderMode on)
+    SatelliteLayer.tsx     PointPrimitiveCollection + 1 Hz batch propagate
+    SearchBar.tsx          Top search input
+    SidePanel.tsx          Right-side selected-satellite detail
   hooks/
-    useSatellites.ts    TanStack Query hooks (v1: ISS only)
+    useSatelliteCatalog.ts TanStack Query — active catalog TLEs
+    useSelectedSatellite.ts Zustand-backed selection hooks
   lib/
-    celestrak.ts        Celestrak TLE fetcher
-    propagator.ts       satellite.js wrapper (SGP4 → geodetic)
+    celestrak.ts           TLE fetch + parse (single + group)
+    propagator.ts          satellite.js wrapper (SGP4 → geodetic)
+    tleMetadata.ts         Derive COSPAR / period / inclination / epoch
+  stores/
+    selection.ts           Zustand store for current selection
   types/
-    satellite.ts        TLE / position / Satellite types
+    satellite.ts           TLE / position / Satellite types
   App.tsx
   main.tsx
   index.css
