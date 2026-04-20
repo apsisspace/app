@@ -12,7 +12,9 @@ import {
   twoline2satrec,
   propagate,
   gstime,
+  eciToEcf,
   eciToGeodetic,
+  type EciVec3,
   type SatRec,
 } from 'satellite.js'
 import type { SatellitePosition, TLE } from '../types/satellite'
@@ -46,4 +48,78 @@ export function propagateToGeodetic(
     // satellite.js returns height in km; Cesium wants meters.
     height: geo.height * 1000,
   }
+}
+
+export interface PropagationResult {
+  /** Geodetic longitude / latitude (degrees) and height (meters). */
+  geodetic: SatellitePosition
+  /** Speed in km/s (magnitude of the ECI velocity vector). */
+  speedKmS: number
+  /** ECI position in km — handy for visibility checks. */
+  eci: EciVec3<number>
+}
+
+/** One call, geodetic + velocity. Returns null on SGP4 error. */
+export function propagateFull(
+  satrec: SatRec,
+  date: Date,
+): PropagationResult | null {
+  const pv = propagate(satrec, date)
+  if (
+    !pv ||
+    !pv.position ||
+    typeof pv.position === 'boolean' ||
+    !pv.velocity ||
+    typeof pv.velocity === 'boolean'
+  ) {
+    return null
+  }
+  const gmst = gstime(date)
+  const geo = eciToGeodetic(pv.position, gmst)
+  const v = pv.velocity
+  const speedKmS = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+  return {
+    geodetic: {
+      longitude: geo.longitude * RAD_TO_DEG,
+      latitude: geo.latitude * RAD_TO_DEG,
+      height: geo.height * 1000,
+    },
+    speedKmS,
+    eci: pv.position,
+  }
+}
+
+/**
+ * Sample one full orbital period into ECEF points suitable for a Cesium
+ * Polyline. Positions are returned as raw xyz arrays (meters) so the caller
+ * can feed `Cartesian3.fromArray`.
+ *
+ * We compute all samples in ECI, then apply the ECI→ECEF rotation **at a
+ * single reference time** — so the orbit visualization appears fixed in
+ * Earth's rotating frame at that instant (standard tracker convention).
+ */
+export function sampleOrbitEcef(
+  satrec: SatRec,
+  referenceDate: Date,
+  periodMinutes: number,
+  samples: number,
+): Float64Array | null {
+  if (!Number.isFinite(periodMinutes) || periodMinutes <= 0) return null
+  const out = new Float64Array(samples * 3)
+  const gmstRef = gstime(referenceDate)
+  const dtMs = (periodMinutes * 60 * 1000) / samples
+  const refMs = referenceDate.getTime()
+  let wrote = 0
+  for (let i = 0; i < samples; i++) {
+    const t = new Date(refMs + i * dtMs)
+    const pv = propagate(satrec, t)
+    if (!pv || !pv.position || typeof pv.position === 'boolean') continue
+    const ecef = eciToEcf(pv.position, gmstRef)
+    out[wrote * 3 + 0] = ecef.x * 1000
+    out[wrote * 3 + 1] = ecef.y * 1000
+    out[wrote * 3 + 2] = ecef.z * 1000
+    wrote++
+  }
+  if (wrote < 4) return null
+  return wrote === samples ? out : out.slice(0, wrote * 3)
 }

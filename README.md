@@ -33,12 +33,14 @@ Get a free token at <https://ion.cesium.com/> → Access Tokens. Without it, Aps
 ## Features (v2)
 
 - Loads Celestrak's **active** catalog (~10,000 satellites) on startup, via a Vercel Edge proxy + localStorage cache (see Data flow below).
-- All satellites propagated client-side (SGP4) once per second and rendered as a single Cesium `PointPrimitiveCollection` for throughput.
-- Cesium `requestRenderMode` is on — idle GPU usage is effectively zero between ticks.
-- **Click** any satellite to open a side panel with name, NORAD ID, COSPAR ID, orbital period, inclination, and TLE epoch.
+- **Smooth motion at display framerate.** SGP4 propagates each satellite once per second into a `next` buffer; every render frame we lerp `prev → next` into the point's position. Same idea Cesium's `SampledPositionProperty` uses internally, applied directly to a single `PointPrimitiveCollection` so 10k satellites stay cheap.
+- **Points scale with camera distance** (`NearFarScalar`), so they stay legible close up and visible zoomed out. Crisp — no fuzz.
+- **Click** any satellite to open a side panel showing **live altitude (km) and velocity (km/s)**, NORAD ID, COSPAR ID, period + regime tag (LEO/MEO/GEO/HEO), inclination, TLE epoch.
+- **Orbit line.** Selected satellite renders its full orbital path as a teal polyline (100 ECEF samples over one period, one-shot on selection).
 - **Search** by name in the top-center input; Enter (or click a result) highlights the satellite in teal and flies the camera to it.
-- Selecting a satellite hands the camera to Cesium's `trackedEntity` mode — zoom/orbit are relative to the satellite, and the camera follows it through its orbit.
+- Selecting a satellite hands the camera to Cesium's `trackedEntity` mode — zoom/orbit are relative to the satellite, and the camera follows it through its orbit. The selected point gets a larger pixelSize + teal outline halo.
 - Selected state lives in a Zustand store; the point layer subscribes imperatively so selection changes never trigger a React re-render of the globe.
+- **Next visible pass** over the user. Opt-in — we request browser geolocation only when the user clicks "Enable location". Location is kept in memory only (never persisted, never sent off-device). Pass search = 24h × 30s steps, gated on satellite elevation > 0°, observer in darkness (sun < −6°), and satellite illuminated (cylindrical Earth-shadow model).
 
 ## Features (v3 — AI layer)
 
@@ -108,9 +110,11 @@ src/
   lib/
     catalogCache.ts        localStorage read/write for the TLE blob
     celestrak.ts           TLE parse (client-side) + legacy direct fetchers
-    propagator.ts          satellite.js wrapper (SGP4 → geodetic)
+    passPrediction.ts      Sun position + next-visible-pass search
+    propagator.ts          satellite.js wrapper (SGP4 + velocity + orbit sampling)
     tleMetadata.ts         Derive COSPAR / period / inclination / epoch
   stores/
+    observer.ts            Zustand store for the user's location (ephemeral)
     selection.ts           Zustand store for current selection
   types/
     chat.ts                Chat message + error shapes
