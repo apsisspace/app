@@ -11,6 +11,8 @@ npm run dev
 
 Then open the URL Vite prints (usually `http://localhost:5173`). You should see Earth and a pink dot labeled **ISS (ZARYA)** moving across the surface as time passes.
 
+There is also an `/about` page that gives a brief overview of the project, how it works, and who built it.
+
 Optional — for premium imagery/terrain, copy `.env.example` to `.env.local` and add a free Cesium ion token:
 
 ```bash
