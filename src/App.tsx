@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { ChatPanel } from './components/ChatPanel'
 import { Globe } from './components/Globe'
 import { HelpModal } from './components/HelpModal'
@@ -19,9 +19,12 @@ import { useUIStore } from './stores/ui'
 // TODO(auth): Add user accounts and pro tier gating.
 
 function App() {
-  const { data: catalog, isPending, failureCount } = useSatelliteCatalog()
+  const { data: catalog, isPending, failureCount, refetch } = useSatelliteCatalog()
   const selectedNoradId = useSelectedNoradId()
   const selected = catalog ? findSelected(catalog, selectedNoradId) : null
+
+  const [showLoading, setShowLoading] = useState(true)
+  const [fadingOut, setFadingOut] = useState(false)
 
   // First-run welcome tip fades out on the user's first meaningful action.
   // We subscribe once; zustand guarantees the unsubscribe cleanup path.
@@ -35,15 +38,21 @@ function App() {
     return unsub
   }, [])
 
+  useEffect(() => {
+    if (catalog && showLoading && !fadingOut) {
+      setFadingOut(true)
+      const timer = setTimeout(() => {
+        setShowLoading(false)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [catalog, showLoading, fadingOut])
+
   // We retry indefinitely, so the query never settles into a terminal error
   // state. failureCount lets us distinguish first load vs. stuck retrying.
   let statusText: string | null = null
   if (catalog) {
     statusText = `${catalog.length.toLocaleString()} satellites`
-  } else if (isPending && failureCount === 0) {
-    statusText = 'Loading active catalog…'
-  } else if (isPending) {
-    statusText = "Couldn't load the satellite catalog. Retrying in a moment…"
   }
 
   return (
@@ -92,7 +101,52 @@ function App() {
 
       {/* About / help modal */}
       <HelpModal />
+
+      {/* Overlays */}
+      {!catalog && failureCount > 0 && (
+        <div className="pointer-events-auto absolute inset-0 z-50 flex flex-col items-center justify-center bg-black font-mono text-xs text-white">
+          <p className="mb-4 text-white/80">Couldn't load the satellite catalog. Check your connection and try again.</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="cursor-pointer border border-[#00d4ff]/40 bg-[#0a0a0a]/95 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[#00d4ff] hover:border-[#00d4ff] hover:bg-[#00d4ff]/10"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {showLoading && (!isPending || failureCount === 0) && (
+        <div
+          className={`pointer-events-auto absolute inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-300 ${
+            fadingOut ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          <div className="flex flex-col items-center font-mono">
+            <h1 className="mb-4 text-lg font-semibold tracking-[0.3em] uppercase text-white/80">
+              Apsis<span className="text-white/40"> · </span>Space
+            </h1>
+            <div className="flex items-center gap-1 text-[11px] uppercase tracking-widest text-[#00d4ff]">
+              LOADING CATALOG
+              <span className="inline-flex gap-0.5 ml-1">
+                <Dot delay="0s" />
+                <Dot delay="0.15s" />
+                <Dot delay="0.3s" />
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function Dot({ delay }: { delay: string }) {
+  return (
+    <span
+      className="h-1 w-1 animate-pulse rounded-full bg-[#00d4ff]/70"
+      style={{ animationDelay: delay }}
+    />
   )
 }
 

@@ -167,6 +167,9 @@ function EmptyState({
 
   return (
     <div className="flex h-full flex-col items-start justify-center gap-3 text-white/60">
+      <div className="text-white/80">
+        Hi. Ask me about what you're seeing.
+      </div>
       <p className="text-[10px] uppercase tracking-widest text-white/40">
         Ask anything about satellites
       </p>
