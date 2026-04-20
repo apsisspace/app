@@ -1,17 +1,20 @@
 /**
  * Renders a list of satellites as points on the globe, updating their
- * positions every frame via client-side SGP4 propagation.
+ * positions via client-side SGP4 propagation.
  *
- * Uses Cesium's CallbackPositionProperty so Cesium itself drives the
- * animation — no React re-renders per tick.
+ * The Viewer runs in requestRenderMode (see Globe.tsx), so Cesium only
+ * redraws on camera input or an explicit requestRender() call. We use
+ * CallbackPositionProperty for positions and trigger a render every
+ * TICK_MS so the position is recomputed and redrawn. Idle GPU usage is
+ * effectively zero.
  *
  * TODO(full-catalog): For thousands of satellites, move to a single
  *   PointPrimitiveCollection and update buffers directly — React/Entity
  *   overhead is fine for tens, not thousands.
  */
 
-import { useMemo } from 'react'
-import { Entity, PointGraphics, LabelGraphics } from 'resium'
+import { useEffect, useMemo } from 'react'
+import { Entity, PointGraphics, LabelGraphics, useCesium } from 'resium'
 import {
   Cartesian3,
   CallbackPositionProperty,
@@ -24,11 +27,28 @@ import {
 import type { Satellite } from '../types/satellite'
 import { tleToSatRec, propagateToGeodetic } from '../lib/propagator'
 
+/** Satellite render cadence, in ms. 1 Hz matches the task spec; higher
+ *  values look smoother but cost more GPU. ISS ground track moves ~1° of
+ *  longitude per second, so 1 Hz produces visible but orderly steps. */
+const TICK_MS = 1000
+
 interface SatelliteLayerProps {
   satellites: Satellite[]
 }
 
 export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
+  const { viewer } = useCesium()
+
+  // Drive Cesium's explicit render loop at TICK_MS. The CallbackPosition-
+  // Property is evaluated during render, so this also advances positions.
+  useEffect(() => {
+    if (!viewer || satellites.length === 0) return
+    const id = window.setInterval(() => {
+      viewer.scene.requestRender()
+    }, TICK_MS)
+    return () => window.clearInterval(id)
+  }, [viewer, satellites.length])
+
   // Parse TLEs once per satellite. When TLE identity changes (e.g. refetch),
   // useMemo produces a fresh SatRec.
   const entries = useMemo(

@@ -52,6 +52,12 @@ export function Globe({ children }: GlobeProps) {
       ref={viewerRef}
       full
       baseLayer={osmImagery}
+      // Explicit-render mode: Cesium only renders on camera input, entity
+      // changes, or an explicit viewer.scene.requestRender() call. Huge GPU
+      // win at idle. We drive satellite updates via requestRender in
+      // SatelliteLayer.
+      requestRenderMode
+      maximumRenderTimeChange={Infinity}
       timeline={false}
       animation={false}
       geocoder={false}
