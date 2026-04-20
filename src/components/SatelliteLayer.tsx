@@ -12,7 +12,9 @@
  *   - Subscribe to the selection store and update the highlighted point's
  *     color/size imperatively (no React re-renders per selection change
  *     from the point-rendering standpoint).
- *   - Fly the camera to the selected satellite's current position.
+ *   - When a satellite is selected, attach a position-only "ghost" Entity
+ *     to viewer.trackedEntity so camera zoom/orbit is relative to the
+ *     moving satellite. On deselect, release the track and fly home.
  *
  * TODO(full-catalog): Frustum-cull or stride propagation if 10k+/1Hz ever
  *   becomes a bottleneck. Current budget on modern hardware is ~20-50ms.
@@ -23,9 +25,12 @@
 import { useEffect } from 'react'
 import { useCesium } from 'resium'
 import {
+  CallbackPositionProperty,
   Cartesian3,
   Color,
+  Entity,
   PointPrimitiveCollection,
+  ReferenceFrame,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   type PointPrimitive,
@@ -40,6 +45,11 @@ const DEFAULT_COLOR = Color.WHITE.withAlpha(0.8)
 const SELECTED_COLOR = Color.fromCssColorString('#00d4ff')
 const DEFAULT_SIZE = 2
 const SELECTED_SIZE = 10
+
+// Hints Cesium where to place the camera when it starts tracking our ghost
+// entity. ~2500 km offset gives a reasonable framing around LEO targets.
+const TRACK_VIEW_FROM = new Cartesian3(0, -3_000_000, 1_500_000)
+const HOME_FLY_SECONDS = 1.0
 
 /** Marker shape we stash in `primitive.id` so pick-handler can look sats up. */
 interface PointId {
@@ -59,18 +69,15 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     if (!viewer || satellites.length === 0) return
 
     // --- Build satrecs ---------------------------------------------------
-    // Invalid TLEs surface as SGP4 error codes during propagate; we keep
-    // them in the array so indices stay aligned with `satellites`.
     const satrecs = satellites.map((s) => tleToSatRec(s.tle))
 
     // --- Create the point collection -------------------------------------
     const collection = new PointPrimitiveCollection()
     viewer.scene.primitives.add(collection)
 
-    // Index lookup: noradId → primitive index. Built once; cheap O(1) picks.
     const indexByNoradId = new Map<number, number>()
     const points: PointPrimitive[] = []
-    const origin = Cartesian3.ZERO // initial placeholder; first tick fills it
+    const origin = Cartesian3.ZERO
 
     for (let i = 0; i < satellites.length; i++) {
       const sat = satellites[i]
@@ -79,7 +86,8 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
         position: origin,
         pixelSize: DEFAULT_SIZE,
         color: DEFAULT_COLOR,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        // Default depth test applies — satellites on Earth's far side are
+        // occluded by the globe, as physically expected.
         show: false, // hide until first successful propagation
         id,
       }) as PointPrimitive
@@ -120,46 +128,81 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     }, ScreenSpaceEventType.LEFT_CLICK)
 
     // --- Selection sync -------------------------------------------------
-    // Track which index is currently "selected" in Cesium-land so we can
-    // restore its appearance when selection moves away.
     let currentHighlight: number | null = null
+    let ghostEntity: Entity | null = null
+
+    const tearDownGhost = () => {
+      if (!ghostEntity) return
+      // Clear tracking first; Cesium won't auto-drop the reference when we
+      // remove the entity, and trackedEntity holding a stale handle causes
+      // subtle "camera stuck" bugs.
+      if (viewer.trackedEntity === ghostEntity) {
+        viewer.trackedEntity = undefined
+      }
+      viewer.entities.remove(ghostEntity)
+      ghostEntity = null
+    }
+
     const applySelection = (noradId: number | null) => {
-      // Restore previous.
+      // Restore previous highlighted point's visuals.
       if (currentHighlight != null && points[currentHighlight]) {
         points[currentHighlight].color = DEFAULT_COLOR
         points[currentHighlight].pixelSize = DEFAULT_SIZE
       }
+
+      // Deselection: release camera tracking and smoothly return home.
       if (noradId == null) {
         currentHighlight = null
-        viewer.scene.requestRender()
+        tearDownGhost()
+        viewer.camera.flyHome(HOME_FLY_SECONDS)
         return
       }
+
       const idx = indexByNoradId.get(noradId)
       if (idx == null) {
         currentHighlight = null
-        viewer.scene.requestRender()
+        tearDownGhost()
         return
       }
+
+      // Highlight the selected point.
       const p = points[idx]
       p.color = SELECTED_COLOR
       p.pixelSize = SELECTED_SIZE
       currentHighlight = idx
 
-      // Fly the camera to the satellite's current position. Using the raw
-      // geodetic position + a fixed offset is more predictable than
-      // flyTo(entity) for a moving target.
-      const pos = propagateToGeodetic(satrecs[idx], new Date())
-      if (pos) {
-        viewer.camera.flyTo({
-          destination: Cartesian3.fromDegrees(
+      // Replace any prior ghost and attach a new one tracking this satrec.
+      // CallbackPositionProperty is re-evaluated on every render — during
+      // user interaction Cesium renders continuously, so the camera follows
+      // the satellite smoothly through its orbit.
+      tearDownGhost()
+      const satrec = satrecs[idx]
+      const trackScratch = new Cartesian3()
+      const positionProperty = new CallbackPositionProperty(
+        (_time, result) => {
+          const pos = propagateToGeodetic(satrec, new Date())
+          if (!pos) return undefined
+          return Cartesian3.fromDegrees(
             pos.longitude,
             pos.latitude,
-            Math.max(pos.height * 3, 2_000_000),
-          ),
-          duration: 1.2,
-        })
-      }
-      viewer.scene.requestRender()
+            pos.height,
+            undefined,
+            result ?? trackScratch,
+          )
+        },
+        false,
+        ReferenceFrame.FIXED,
+      )
+
+      ghostEntity = viewer.entities.add({
+        position: positionProperty,
+        // Hint for camera framing when Cesium starts tracking.
+        viewFrom: TRACK_VIEW_FROM,
+      })
+
+      // Setting trackedEntity triggers Cesium's own flyTo + enters tracking
+      // mode: user zoom/orbit input is then relative to the satellite.
+      viewer.trackedEntity = ghostEntity
     }
 
     applySelection(useSelectionStore.getState().selectedNoradId)
@@ -174,6 +217,7 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       window.clearInterval(intervalId)
       unsubscribe()
       handler.destroy()
+      tearDownGhost()
       if (!viewer.isDestroyed()) {
         viewer.scene.primitives.remove(collection)
       }
