@@ -17,6 +17,8 @@ import {
   orbitRegime,
   type PassInfo,
 } from '../lib/passPrediction'
+import { bandForInclinationDeg } from '../lib/inclinationColor'
+import type { InclinationBand } from '../lib/inclinationColor'
 import { useSelectionActions } from '../hooks/useSelectedSatellite'
 import { useObserverStore } from '../stores/observer'
 
@@ -96,13 +98,30 @@ export function SidePanel({ satellite }: SidePanelProps) {
   const periodText = Number.isFinite(meta.periodMinutes)
     ? `${meta.periodMinutes.toFixed(0)} min${regime ? ` (${regime})` : ''}`
     : '—'
+  const band: InclinationBand | null = Number.isFinite(meta.inclinationDeg)
+    ? bandForInclinationDeg(foldInclination(meta.inclinationDeg))
+    : null
 
   return (
     <aside className="pointer-events-auto flex w-80 flex-col gap-3 border border-white/10 bg-[#0a0a0a]/95 p-4 font-mono text-xs text-white/80">
       <header className="flex items-start justify-between gap-2">
-        <h2 className="text-sm font-semibold tracking-wide text-[#00d4ff]">
-          {satellite.tle.name}
-        </h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-sm font-semibold tracking-wide text-[#00d4ff]">
+            {satellite.tle.name}
+          </h2>
+          {band && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="inline-block h-2 w-2 shrink-0"
+                style={{ backgroundColor: band.hex }}
+              />
+              <span className="text-[10px] uppercase tracking-widest text-white/55">
+                {band.name} · {meta.inclinationDeg.toFixed(1)}°
+              </span>
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={clear}
@@ -291,4 +310,11 @@ function formatRelative(d: Date): string {
   const hours = Math.round(mins / 60)
   if (hours < 24) return `in ${hours} h`
   return `in ${Math.round(hours / 24)} d`
+}
+
+// Some TLEs encode retrograde orbits with inclination > 180°; fold to [0,180]
+// so the band classifier sees a canonical value.
+function foldInclination(deg: number): number {
+  const abs = Math.abs(deg)
+  return abs > 180 ? 360 - abs : abs
 }
