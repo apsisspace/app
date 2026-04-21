@@ -18,6 +18,7 @@ import type {
   ChatContext,
   ChatErrorKind,
   ChatMessage,
+  ChatSource,
 } from '../types/chat'
 
 const API_URL = '/api/query'
@@ -60,6 +61,20 @@ function buildContext(catalog: Satellite[] | undefined): ChatContext | undefined
         : '',
     },
   }
+}
+
+function parseSources(raw: unknown): ChatSource[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  const out: ChatSource[] = []
+  for (const s of raw) {
+    if (!s || typeof s !== 'object') continue
+    const r = s as { label?: unknown; url?: unknown }
+    if (typeof r.label !== 'string' || r.label.trim() === '') continue
+    const entry: ChatSource = { label: r.label }
+    if (typeof r.url === 'string' && r.url.trim() !== '') entry.url = r.url
+    out.push(entry)
+  }
+  return out.length > 0 ? out : undefined
 }
 
 function validateQuestion(q: string): string | null {
@@ -144,7 +159,7 @@ export function useChat({ catalog }: UseChatOptions): UseChatResult {
           return
         }
 
-        const ok = payload as { answer?: string } | null
+        const ok = payload as { answer?: string; sources?: unknown } | null
         const answer = typeof ok?.answer === 'string' ? ok.answer : ''
         if (!answer) {
           setMessages((prev) => [
@@ -167,6 +182,7 @@ export function useChat({ catalog }: UseChatOptions): UseChatResult {
             role: 'assistant',
             content: answer,
             createdAt: Date.now(),
+            sources: parseSources(ok?.sources),
           },
         ])
       } catch (err) {

@@ -22,6 +22,19 @@ export interface ChatMessage {
    * assistant reply or any user message.
    */
   errorKind?: ChatErrorKind
+  /**
+   * Citations attached by the server based on which tools returned data.
+   * Undefined / empty means the AI answered from training data only.
+   */
+  sources?: ChatSource[]
+}
+
+/** One citation line rendered under the assistant's answer. */
+export interface ChatSource {
+  /** Human-readable label. Always present. */
+  label: string
+  /** Optional URL — absent for "live data" citations. */
+  url?: string
 }
 
 /** Discrete error categories the UI can render differently. */

@@ -158,7 +158,6 @@ export function SidePanel({ satellite }: SidePanelProps) {
               : '—'
           }
         />
-        <Field label="TLE epoch" value={formatEpoch(meta.epoch)} />
       </dl>
 
       {/* Next pass */}
@@ -174,6 +173,10 @@ export function SidePanel({ satellite }: SidePanelProps) {
           onRequestLocation={requestObserver}
         />
       </div>
+
+      <div className="mt-2 text-center text-[10px] text-white/40">
+        Data from TLE epoch {formatEpoch(meta.epoch)}
+      </div>
     </aside>
   )
 }
@@ -184,7 +187,7 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <>
       <dt className="text-white/40 uppercase">{label}</dt>
-      <dd className="text-white">{value}</dd>
+      <dd className={value === '—' ? 'text-white/40' : 'text-white'}>{value}</dd>
     </>
   )
 }
@@ -198,6 +201,7 @@ function Stat({
   value: string
   accent?: boolean
 }) {
+  const isMissing = value === '—'
   return (
     <div className="flex flex-col">
       <span className="text-[10px] uppercase tracking-widest text-white/40">
@@ -205,7 +209,11 @@ function Stat({
       </span>
       <span
         className={
-          accent ? 'text-sm text-[#00d4ff]' : 'text-sm text-white'
+          isMissing
+            ? 'text-sm text-white/40'
+            : accent
+              ? 'text-sm text-[#00d4ff]'
+              : 'text-sm text-white'
         }
       >
         {value}
