@@ -13,7 +13,7 @@ import {
   gstime,
   eciToGeodetic,
 } from 'satellite.js'
-import type { TLE } from './catalog'
+import type { TLE } from './catalog.js'
 
 const RAD_TO_DEG = 180 / Math.PI
 const EARTH_RADIUS_KM = 6371.0088

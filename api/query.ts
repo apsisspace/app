@@ -30,7 +30,7 @@ import type {
   ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/messages'
 import { Redis } from '@upstash/redis'
-import { TOOLS, runTool, type Source, type ToolRunState } from './_lib/tools'
+import { TOOLS, runTool, type Source, type ToolRunState } from './_lib/tools.js'
 
 export const config = { runtime: 'edge' }
 
@@ -237,7 +237,10 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const parsed = sanitizeQuestion(body?.question)
-  if (!parsed.ok) {
+  // Use `'message' in parsed` rather than `!parsed.ok` — Vercel's edge
+  // TS build narrows discriminated unions less aggressively than our
+  // local bundler mode, so the shape-based guard is what compiles.
+  if ('message' in parsed) {
     return jsonResponse({ error: 'invalid_question', message: parsed.message }, 400)
   }
   const question = parsed.value
