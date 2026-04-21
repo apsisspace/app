@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200, initial-scale=1.0">
+<title>OG Image Template</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    width: 1200px;
+    height: 630px;
+    background-color: #000000;
+    font-family: system-ui, -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .title {
+    font-size: 100px;
+    font-weight: 800;
+    color: #f0f0f0;
+    letter-spacing: 4px;
+    margin: 0;
+    z-index: 10;
+  }
+  .subtitle {
+    font-size: 40px;
+    color: #00d4ff;
+    margin-top: 20px;
+    font-family: monospace;
+    z-index: 10;
+  }
+  .tagline {
+    position: absolute;
+    bottom: 40px;
+    font-size: 24px;
+    color: #888888;
+    font-family: monospace;
+    z-index: 10;
+  }
+  .orbital-ring {
+    position: absolute;
+    right: -200px;
+    top: 50%;
+    transform: translateY(-50%) rotate(-15deg);
+    width: 800px;
+    height: 300px;
+    border: 2px solid rgba(0, 212, 255, 0.2);
+    border-radius: 50%;
+    z-index: 1;
+  }
+  .orbital-ring-2 {
+    position: absolute;
+    right: -100px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+    width: 600px;
+    height: 200px;
+    border: 2px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    z-index: 1;
+  }
+  .satellite-dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background-color: #00d4ff;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #00d4ff;
+  }
+  .dot-1 { right: 150px; top: 150px; }
+  .dot-2 { right: 400px; bottom: 200px; }
+  .dot-3 { right: 50px; bottom: 100px; }
+</style>
+</head>
+<body>
+  <div class="orbital-ring"></div>
+  <div class="orbital-ring-2"></div>
+  <div class="satellite-dot dot-1"></div>
+  <div class="satellite-dot dot-2"></div>
+  <div class="satellite-dot dot-3"></div>
+
+  <h1 class="title">APSIS SPACE</h1>
+  <p class="subtitle">AI-native satellite tracker</p>
+  <div class="tagline">app.apsisspace.com</div>
+</body>
+</html>
