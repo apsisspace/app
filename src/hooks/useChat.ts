@@ -31,11 +31,18 @@ interface UseChatOptions {
   catalog: Satellite[] | undefined
 }
 
+export interface UsageData {
+  used: number
+  limit: number
+  resetsAt: string
+}
+
 interface UseChatResult {
   messages: ChatMessage[]
   isSending: boolean
   sendMessage: (question: string) => Promise<void>
   clear: () => void
+  usage: UsageData | null | undefined
 }
 
 function nextId(): string {
@@ -89,6 +96,7 @@ function validateQuestion(q: string): string | null {
 export function useChat({ catalog }: UseChatOptions): UseChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
+  const [usage, setUsage] = useState<UsageData | null | undefined>(undefined)
   const inFlight = useRef(false)
 
   const sendMessage = useCallback(
@@ -137,6 +145,13 @@ export function useChat({ catalog }: UseChatOptions): UseChatResult {
           payload = await res.json()
         } catch {
           // Non-JSON response; fall through to generic error.
+        }
+
+        if (payload && typeof payload === 'object' && 'usage' in payload) {
+          const u = (payload as { usage: unknown }).usage
+          if (u && typeof u === 'object' && 'used' in u && 'limit' in u && 'resetsAt' in u) {
+            setUsage(u as UsageData)
+          }
         }
 
         if (!res.ok) {
@@ -211,5 +226,5 @@ export function useChat({ catalog }: UseChatOptions): UseChatResult {
     setMessages([])
   }, [])
 
-  return { messages, isSending, sendMessage, clear }
+  return { messages, isSending, sendMessage, clear, usage }
 }

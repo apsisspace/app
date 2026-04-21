@@ -17,6 +17,7 @@ interface UIState {
    * The welcome tip listens to this to fade itself out.
    */
   hasInteracted: boolean
+  chatOpen: boolean
 
   cycleEarthMode: () => void
   setEarthMode: (m: EarthMode) => void
@@ -24,6 +25,7 @@ interface UIState {
   setLegendOpen: (open: boolean) => void
   setHelpOpen: (open: boolean) => void
   markInteracted: () => void
+  setChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void
 }
 
 const EARTH_MODE_ORDER: readonly EarthMode[] = ['minimal', 'full', 'night']
@@ -33,6 +35,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   legendOpen: false,
   helpOpen: false,
   hasInteracted: false,
+  chatOpen: false,
 
   cycleEarthMode: () => {
     const cur = get().earthMode
@@ -44,6 +47,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleLegend: () => set((s) => ({ legendOpen: !s.legendOpen })),
   setLegendOpen: (legendOpen) => set({ legendOpen }),
   setHelpOpen: (helpOpen) => set({ helpOpen }),
+  setChatOpen: (updater) => set((state) => ({ chatOpen: typeof updater === 'function' ? updater(state.chatOpen) : updater })),
   markInteracted: () => {
     if (!get().hasInteracted) set({ hasInteracted: true })
   },
