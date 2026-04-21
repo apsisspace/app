@@ -72,6 +72,11 @@ export function SearchBar({ catalog }: SearchBarProps) {
           ))}
         </ul>
       )}
+      {query.trim().length >= 2 && results.length === 0 && (
+        <div className="mt-1 border border-white/10 bg-[#0a0a0a]/95 px-3 py-2 text-white/50">
+          No satellites match '{query}'. Try the NORAD ID or a different name.
+        </div>
+      )}
     </div>
   )
 }
