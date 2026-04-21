@@ -252,24 +252,27 @@ export default async function handler(req: Request): Promise<Response> {
   const ttl = secondsUntilNextUtcMidnight()
   const ip = clientIp(req)
 
+  // Default usage object
+  let finalUsage = {
+    used: 1,
+    limit: PER_IP_DAILY_LIMIT,
+    resetsAt: new Date(Date.now() + ttl * 1000).toISOString()
+  }
+
   if (redis) {
     try {
       const ipKey = `ratelimit:${ip}:${today}`
       const ipCount = await redis.incr(ipKey)
       if (ipCount === 1) await redis.expire(ipKey, ttl)
 
-      const usage = {
-        used: ipCount,
-        limit: PER_IP_DAILY_LIMIT,
-        resetsAt: new Date(Date.now() + ttl * 1000).toISOString(),
-      }
+      finalUsage.used = ipCount
 
       if (ipCount > PER_IP_DAILY_LIMIT) {
         return jsonResponse(
           {
             error: 'daily_limit_reached',
             message: `You've hit the daily limit of ${PER_IP_DAILY_LIMIT} questions. Try again after UTC midnight.`,
-            usage,
+            usage: finalUsage,
           },
           429,
         )
@@ -286,7 +289,7 @@ export default async function handler(req: Request): Promise<Response> {
           {
             error: 'daily_budget_reached',
             message: `Apsis has reached today's $${GLOBAL_DAILY_BUDGET_USD} AI budget. Try again after UTC midnight.`,
-            usage,
+            usage: finalUsage,
           },
           503,
         )
@@ -294,17 +297,6 @@ export default async function handler(req: Request): Promise<Response> {
     } catch (err) {
       console.error('[query] Redis error (failing open):', err)
     }
-  }
-
-  // Fallback usage if Redis fails or isn't configured
-  let finalUsage = { used: 1, limit: PER_IP_DAILY_LIMIT, resetsAt: new Date(Date.now() + ttl * 1000).toISOString() }
-  if (redis) {
-    try {
-      const ipCount = await redis.get<number>(`ratelimit:${ip}:${today}`)
-      if (ipCount) {
-        finalUsage = { used: ipCount, limit: PER_IP_DAILY_LIMIT, resetsAt: new Date(Date.now() + ttl * 1000).toISOString() }
-      }
-    } catch (e) {}
   }
 
   // ---- call Claude with tool use loop ----
