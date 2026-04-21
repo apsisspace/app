@@ -22,14 +22,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <Switch>
+          <Route path="/about" component={About} />
+          <Route path="/" component={App} />
+        </Switch>
       </QueryClientProvider>
     </ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <Switch>
-        <Route path="/about" component={About} />
-        <Route path="/" component={App} />
-      </Switch>
-    </QueryClientProvider>
   </StrictMode>,
 )
