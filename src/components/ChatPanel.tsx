@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Satellite } from '../types/satellite'
 import { useChat, MAX_QUESTION_CHARS } from '../hooks/useChat'
 import { useSelectedNoradId } from '../hooks/useSelectedSatellite'
-import type { ChatMessage, ChatErrorKind } from '../types/chat'
+import type { ChatMessage, ChatErrorKind, ChatSource } from '../types/chat'
 import { useUIStore } from '../stores/ui'
 
 interface ChatPanelProps {
@@ -206,9 +206,38 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div className="flex">
-      <div className="max-w-[85%] border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-white/85 whitespace-pre-wrap">
-        {message.content}
+      <div className="max-w-[85%] border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-white/85">
+        <div className="whitespace-pre-wrap">{message.content}</div>
+        {message.sources && message.sources.length > 0 && (
+          <SourcesBlock sources={message.sources} />
+        )}
       </div>
+    </div>
+  )
+}
+
+function SourcesBlock({ sources }: { sources: ChatSource[] }) {
+  return (
+    <div className="mt-2 border-t border-white/10 pt-1.5 font-mono text-[10px] leading-snug text-[#666]">
+      <div className="uppercase tracking-widest">Sources:</div>
+      <ul className="mt-0.5 space-y-0.5">
+        {sources.map((s, i) => (
+          <li key={`${s.url ?? s.label}-${i}`} className="break-all">
+            {s.url ? (
+              <a
+                href={s.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-[#00d4ff] hover:underline"
+              >
+                {s.label}
+              </a>
+            ) : (
+              <span>{s.label}</span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
