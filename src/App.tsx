@@ -38,15 +38,19 @@ function App() {
     return unsub
   }, [])
 
+  // Kick off the fade-out the moment the catalog arrives. Depending only on
+  // `catalog` keeps this effect from re-running when `fadingOut` flips —
+  // earlier versions had `fadingOut` in the deps, which caused the cleanup
+  // to clearTimeout the 300ms unmount timer before it could fire, leaving
+  // the overlay in the DOM at opacity-0 but with pointer-events-auto.
   useEffect(() => {
-    if (catalog && showLoading && !fadingOut) {
-      setFadingOut(true)
-      const timer = setTimeout(() => {
-        setShowLoading(false)
-      }, 300)
-      return () => clearTimeout(timer)
-    }
-  }, [catalog, showLoading, fadingOut])
+    if (!catalog) return
+    setFadingOut(true)
+    const timer = setTimeout(() => {
+      setShowLoading(false)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [catalog])
 
   // We retry indefinitely, so the query never settles into a terminal error
   // state. failureCount lets us distinguish first load vs. stuck retrying.
@@ -118,8 +122,10 @@ function App() {
 
       {showLoading && (!isPending || failureCount === 0) && (
         <div
-          className={`pointer-events-auto absolute inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-300 ${
-            fadingOut ? 'opacity-0' : 'opacity-100'
+          className={`absolute inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-300 ${
+            fadingOut
+              ? 'pointer-events-none opacity-0'
+              : 'pointer-events-auto opacity-100'
           }`}
         >
           <div className="flex flex-col items-center font-mono">
