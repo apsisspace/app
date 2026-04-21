@@ -26,10 +26,21 @@ const SUGGESTIONS = [
 ]
 
 export function ChatPanel({ catalog }: ChatPanelProps) {
-  const [open, setOpen] = useState(false)
+  const open = useUIStore((s) => s.chatOpen)
+  const setOpen = useUIStore((s) => s.setChatOpen)
   const [draft, setDraft] = useState('')
-  const { messages, isSending, sendMessage } = useChat({ catalog })
+  const { messages, isSending, sendMessage, usage } = useChat({ catalog })
   const selectedNoradId = useSelectedNoradId()
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'c' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
+        setOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [setOpen])
 
   // Only read the name when we actually need it, cheaply — resolved here
   // because catalog+id already flow into this component.
@@ -84,14 +95,17 @@ export function ChatPanel({ catalog }: ChatPanelProps) {
             beta
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label="Close chat"
-          className="cursor-pointer text-white/50 hover:text-white"
-        >
-          ×
-        </button>
+        <div className="flex items-center gap-3">
+          <UsageCounter usage={usage} />
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close chat"
+            className="cursor-pointer text-white/50 hover:text-white"
+          >
+            ×
+          </button>
+        </div>
       </header>
 
       {/* Message list */}
@@ -162,7 +176,12 @@ function EmptyState({
   onPick: (q: string) => void
 }) {
   const pills = selectedName
-    ? [`Tell me about ${selectedName}.`, ...SUGGESTIONS]
+    ? [
+        `What does ${selectedName} do?`,
+        `Who operates ${selectedName}?`,
+        `When does ${selectedName} pass over me?`,
+        `Tell me about ${selectedName}'s orbit`
+      ]
     : SUGGESTIONS
 
   return (
@@ -287,5 +306,58 @@ function Dot({ delay }: { delay: string }) {
       className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#00d4ff]/70"
       style={{ animationDelay: delay }}
     />
+  )
+}
+
+function UsageCounter({ usage }: { usage: { used: number; limit: number; resetsAt: string } | null | undefined }) {
+  if (!usage) {
+    return (
+      <div
+        className="font-mono text-[10px] text-white/40"
+        title="Daily AI queries. Resets at midnight UTC."
+      >
+        — / 20
+      </div>
+    )
+  }
+
+  const { used, limit, resetsAt } = usage
+  let colorClass = 'text-white/40'
+  if (used >= limit) {
+    colorClass = 'text-red-400'
+  } else if (used >= 15) {
+    colorClass = 'text-[#ffbb44]'
+  }
+
+  let localTime = 'midnight UTC'
+  if (resetsAt) {
+    try {
+      const d = new Date(resetsAt)
+      if (!isNaN(d.getTime())) {
+        localTime = d.toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZoneName: 'short',
+        })
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  const tooltip = `Daily AI queries. Resets at midnight UTC (${localTime}).`
+
+  if (used >= limit) {
+    return (
+      <div className={`font-mono text-[10px] ${colorClass}`} title={tooltip}>
+        {used} / {limit} · resets at {localTime}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`font-mono text-[10px] ${colorClass}`} title={tooltip}>
+      {used} / {limit}
+    </div>
   )
 }

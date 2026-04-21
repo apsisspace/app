@@ -257,11 +257,19 @@ export default async function handler(req: Request): Promise<Response> {
       const ipKey = `ratelimit:${ip}:${today}`
       const ipCount = await redis.incr(ipKey)
       if (ipCount === 1) await redis.expire(ipKey, ttl)
+
+      const usage = {
+        used: ipCount,
+        limit: PER_IP_DAILY_LIMIT,
+        resetsAt: new Date(Date.now() + ttl * 1000).toISOString(),
+      }
+
       if (ipCount > PER_IP_DAILY_LIMIT) {
         return jsonResponse(
           {
             error: 'daily_limit_reached',
             message: `You've hit the daily limit of ${PER_IP_DAILY_LIMIT} questions. Try again after UTC midnight.`,
+            usage,
           },
           429,
         )
@@ -278,6 +286,7 @@ export default async function handler(req: Request): Promise<Response> {
           {
             error: 'daily_budget_reached',
             message: `Apsis has reached today's $${GLOBAL_DAILY_BUDGET_USD} AI budget. Try again after UTC midnight.`,
+            usage,
           },
           503,
         )
@@ -285,6 +294,17 @@ export default async function handler(req: Request): Promise<Response> {
     } catch (err) {
       console.error('[query] Redis error (failing open):', err)
     }
+  }
+
+  // Fallback usage if Redis fails or isn't configured
+  let finalUsage = { used: 1, limit: PER_IP_DAILY_LIMIT, resetsAt: new Date(Date.now() + ttl * 1000).toISOString() }
+  if (redis) {
+    try {
+      const ipCount = await redis.get<number>(`ratelimit:${ip}:${today}`)
+      if (ipCount) {
+        finalUsage = { used: ipCount, limit: PER_IP_DAILY_LIMIT, resetsAt: new Date(Date.now() + ttl * 1000).toISOString() }
+      }
+    } catch (e) {}
   }
 
   // ---- call Claude with tool use loop ----
@@ -445,6 +465,7 @@ Question: ${question}`
         error: 'upstream_error',
         message:
           'This question went beyond the per-request cost cap. Try a narrower question.',
+        usage: finalUsage,
       },
       502,
     )
@@ -457,6 +478,7 @@ Question: ${question}`
         error: 'upstream_error',
         message:
           'The AI ran out of tool-use steps. Try asking a more focused question.',
+        usage: finalUsage,
       },
       502,
     )
@@ -464,13 +486,13 @@ Question: ${question}`
 
   if (!answer) {
     return jsonResponse(
-      { error: 'upstream_error', message: 'Model returned an empty response.' },
+      { error: 'upstream_error', message: 'Model returned an empty response.', usage: finalUsage },
       502,
     )
   }
 
   const sources: Source[] = dedupeSources(toolState.sources)
-  return jsonResponse({ answer, sources }, 200)
+  return jsonResponse({ answer, sources, usage: finalUsage }, 200)
 }
 
 function dedupeSources(sources: Source[]): Source[] {

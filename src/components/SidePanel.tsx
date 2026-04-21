@@ -21,6 +21,7 @@ import { bandForInclinationDeg } from '../lib/inclinationColor'
 import type { InclinationBand } from '../lib/inclinationColor'
 import { useSelectionActions } from '../hooks/useSelectedSatellite'
 import { useObserverStore } from '../stores/observer'
+import { useUIStore } from '../stores/ui'
 
 interface SidePanelProps {
   satellite: Satellite
@@ -102,6 +103,8 @@ export function SidePanel({ satellite }: SidePanelProps) {
     ? bandForInclinationDeg(foldInclination(meta.inclinationDeg))
     : null
 
+  const setChatOpen = useUIStore((s) => s.setChatOpen)
+
   return (
     <aside className="pointer-events-auto flex w-80 flex-col gap-3 border border-white/10 bg-[#0a0a0a]/95 p-4 font-mono text-xs text-white/80">
       <header className="flex items-start justify-between gap-2">
@@ -176,6 +179,16 @@ export function SidePanel({ satellite }: SidePanelProps) {
 
       <div className="mt-2 text-center text-[10px] text-white/40">
         Data from TLE epoch {formatEpoch(meta.epoch)}
+      </div>
+
+      <div className="mt-3 border-t border-white/10 pt-3">
+        <button
+          type="button"
+          onClick={() => setChatOpen(true)}
+          className="w-full cursor-pointer border border-[#00d4ff]/40 bg-transparent py-2 text-center text-[#00d4ff] hover:border-[#00d4ff] hover:bg-[#00d4ff]/10 uppercase tracking-widest text-xs"
+        >
+          Ask about {satellite.tle.name}
+        </button>
       </div>
     </aside>
   )
