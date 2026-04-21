@@ -13,7 +13,7 @@
  *   - No cache at all  → 502 with the upstream error
  */
 
-import { getCatalogText } from './_lib/catalog'
+import { getCatalogText } from './_lib/catalog.js'
 
 export const config = { runtime: 'edge' }
 

@@ -22,7 +22,10 @@ import matter from 'gray-matter'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const KNOWLEDGE_DIR = resolve(here, '..', 'src', 'data', 'knowledge')
-const OUTPUT = resolve(here, '..', 'src', 'data', 'knowledge.generated.ts')
+// Output lives inside api/_lib so Vercel's Edge Function TS project can see
+// it without importing across the src/ boundary. The underscore prefix keeps
+// Vercel from treating it as a function.
+const OUTPUT = resolve(here, '..', 'api', '_lib', 'knowledge.generated.ts')
 
 function fail(msg) {
   console.error(`[build-knowledge] ${msg}`)

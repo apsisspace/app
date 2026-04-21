@@ -17,13 +17,13 @@ import {
   getCatalog,
   findByNoradId,
   searchByName,
-} from './catalog'
-import { computeSatelliteInfo } from './propagate'
+} from './catalog.js'
+import { computeSatelliteInfo } from './propagate.js'
 import {
   getKnowledgeByNoradId,
   getKnowledgeByTopic,
   type KnowledgeEntry,
-} from '../../src/data/knowledge.generated'
+} from './knowledge.generated.js'
 
 const TOOL_TIMEOUT_MS = 3000
 
