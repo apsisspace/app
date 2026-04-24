@@ -2,13 +2,71 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Apsis Space — Satellite Tracker</title>
+    <title>Apsis Space — Track every satellite in orbit</title>
+    <meta name="description" content="An AI-native satellite tracker. See all 10,000+ active satellites in real-time 3D. Ask questions. Understand what's in orbit above you.">
+    <meta name="keywords" content="satellite tracker, ISS tracker, orbital tracking, space domain awareness, AI satellite tracker, real-time satellites">
+    <meta name="author" content="Apsis Space">
+    <meta name="theme-color" content="#000000">
+    <meta name="color-scheme" content="dark">
+
+    <meta property="og:title" content="Apsis Space — Track every satellite in orbit">
+    <meta property="og:description" content="An AI-native satellite tracker. See all 10,000+ active satellites in real-time 3D. Ask questions. Understand what's in orbit above you.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://app.apsisspace.com">
+    <meta property="og:image" content="https://app.apsisspace.com/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="Apsis Space">
+    <meta property="og:locale" content="en_US">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Apsis Space — Track every satellite in orbit">
+    <meta name="twitter:description" content="An AI-native satellite tracker. See all 10,000+ active satellites in real-time 3D. Ask questions. Understand what's in orbit above you.">
+    <meta name="twitter:image" content="https://app.apsisspace.com/og-image.png">
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Apsis Space",
+      "url": "https://app.apsisspace.com",
+      "description": "An AI-native browser-based satellite tracker. See every active satellite in real-time 3D and ask questions in plain English.",
+      "applicationCategory": "WebApplication",
+      "operatingSystem": "Any (browser-based)",
+      "browserRequirements": "Modern browser with WebGL support",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "Apsis Space",
+        "url": "https://apsisspace.com"
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+  <noscript>
+      <div style="background: #000; color: #fff; padding: 2rem; font-family: system-ui, sans-serif; text-align: center;">
+        <h1 style="color: #00d4ff;">Apsis Space</h1>
+        <p>Apsis Space requires JavaScript to render the 3D satellite tracker.</p>
+        <p>Please enable JavaScript, or visit <a href="https://apsisspace.com" style="color: #00d4ff;">apsisspace.com</a> to learn more.</p>
+      </div>
+    </noscript>
+    <!-- Cloudflare Web Analytics -->
+    <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN"}'></script>
+    <!-- End Cloudflare Web Analytics -->
   </body>
   <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f93f89077725497395cca7a4ebbac7e4"}'></script><!-- End Cloudflare Web Analytics -->
 </html>
