@@ -102,14 +102,19 @@ export function About() {
         {/* Footer */}
         <footer className="border-t border-white/10 pt-8 font-mono text-[10px] uppercase tracking-widest text-white/40 flex justify-between items-center">
           <div>&copy; {new Date().getFullYear()} Apsis Space</div>
-          <a
-            href="https://apsisspace.com"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[#00d4ff] hover:underline"
-          >
-            apsisspace.com
-          </a>
+          <div className="flex items-center gap-4">
+            <Link href="/satellites" className="text-[#00d4ff] hover:underline">
+              Notable satellites
+            </Link>
+            <a
+              href="https://apsisspace.com"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[#00d4ff] hover:underline"
+            >
+              apsisspace.com
+            </a>
+          </div>
         </footer>
       </main>
     </div>
