@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
 import { ChatPanel } from './components/ChatPanel'
 import { Globe } from './components/Globe'
@@ -42,12 +42,30 @@ function App() {
   // --- URL ↔ selection sync -------------------------------------------
   // The root route lives at "/". When the user clicks a satellite we push
   // /satellite/:noradId into history so the URL is shareable. When they
-  // close the panel (selection → null), we push "/" back. We only mutate
-  // the URL if it doesn't already match the selection, which keeps us
-  // from fighting SatelliteRoute's own "URL → selection" effect or
-  // triggering an infinite loop on back/forward navigation.
+  // close the panel (selection → null), we push "/" back.
+  //
+  // The tricky case is a cold load of /satellite/:id. App's effects run
+  // BEFORE SatelliteRoute's effects (children first), so we see
+  // selectedNoradId=null while the URL already says /satellite/25544.
+  // A naive sync would preemptively navigate(`/`) and SatelliteRoute
+  // would never get its turn. The ref below tracks whether we've ever
+  // observed a non-null selection — before that happens, a null
+  // selection on a /satellite/ URL is interpreted as "route is still
+  // initializing" and we leave the URL alone. After the first real
+  // selection we accept null as "user closed the panel" and navigate.
   const [location, navigate] = useLocation()
+  const hasSelectionEverSet = useRef(false)
   useEffect(() => {
+    if (selectedNoradId != null) hasSelectionEverSet.current = true
+
+    if (
+      !hasSelectionEverSet.current &&
+      selectedNoradId == null &&
+      location.startsWith('/satellite/')
+    ) {
+      return
+    }
+
     const expected =
       selectedNoradId != null ? `/satellite/${selectedNoradId}` : '/'
     if (location !== expected) {
