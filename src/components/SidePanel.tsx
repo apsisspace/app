@@ -11,7 +11,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Satellite } from '../types/satellite'
 import { tleMetadata } from '../lib/tleMetadata'
-import { tleToSatRec, propagateFull } from '../lib/propagator'
+import {
+  tleToSatRec,
+  propagateFull,
+  isOrbitUnreliable,
+} from '../lib/propagator'
 import {
   findNextVisiblePass,
   orbitRegime,
@@ -95,6 +99,7 @@ export function SidePanel({ satellite }: SidePanelProps) {
   }, [satrec, observer])
 
   // --- Derivations ------------------------------------------------------
+  const orbitUnreliable = useMemo(() => isOrbitUnreliable(satrec), [satrec])
   const regime = live ? orbitRegime(live.altKm) : ''
   const periodText = Number.isFinite(meta.periodMinutes)
     ? `${meta.periodMinutes.toFixed(0)} min${regime ? ` (${regime})` : ''}`
@@ -162,6 +167,17 @@ export function SidePanel({ satellite }: SidePanelProps) {
           }
         />
       </dl>
+
+      {/* Deep-space advisory. SGP4/SDP4 accuracy degrades rapidly past
+          ~50,000 km apogee; we suppress the orbit polyline in that case
+          (see isOrbitUnreliable) and say so here so the absence doesn't
+          read as a bug. */}
+      {orbitUnreliable && (
+        <div className="mt-1 border border-amber-500/20 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-200/80">
+          Orbit visualization unavailable for deep-space objects. Position
+          estimates may also drift.
+        </div>
+      )}
 
       {/* Next pass */}
       <div className="border-t border-white/10 pt-3">

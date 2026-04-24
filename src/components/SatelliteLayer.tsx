@@ -75,7 +75,11 @@ import {
 } from '../lib/inclinationColor'
 
 const TICK_MS = 1000
-const ORBIT_SAMPLES = 100
+// 256 samples per orbit uniformly in eccentric anomaly gives smooth
+// polylines even for moderately eccentric orbits. LEO/GEO look identical
+// to the old uniform-in-time sampling (e≈0 → M≈E so times land evenly);
+// eccentric orbits get denser perigee coverage automatically.
+const ORBIT_SAMPLES = 256
 
 const SELECTED_COLOR = Color.fromCssColorString('#00d4ff')
 const SELECTED_OUTLINE = Color.fromCssColorString('#00d4ff').withAlpha(0.5)
@@ -92,6 +96,7 @@ const POINT_SCALE_BY_DISTANCE = new NearFarScalar(1.5e6, 1.3, 1.5e8, 0.7)
 
 const TRACK_VIEW_FROM = new Cartesian3(0, -3_000_000, 1_500_000)
 const HOME_FLY_SECONDS = 1.0
+const SELECT_FLY_SECONDS = 1.2
 
 /** Sentinel for a satellite whose SGP4 call failed (e.g. decayed). */
 const INVALID_SAMPLE = Number.NaN
@@ -315,6 +320,12 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     }
 
     // --- Selection sync -------------------------------------------------
+    // A monotonic counter stamped onto every applySelection invocation.
+    // Async camera work (viewer.flyTo) can still be in-flight when the
+    // user picks a new satellite; the sequence number lets us drop stale
+    // flight completions instead of stamping trackedEntity on a ghost
+    // that's already been torn down.
+    let selectionSeq = 0
     let currentHighlight: number | null = null
     let ghostEntity: Entity | null = null
 
@@ -328,6 +339,8 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     }
 
     const applySelection = (noradId: number | null) => {
+      const seq = ++selectionSeq
+
       if (currentHighlight != null && points[currentHighlight]) {
         const prevP = points[currentHighlight]
         // Restore the previous satellite's inclination-band color.
@@ -338,6 +351,8 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
 
       if (noradId == null) {
         currentHighlight = null
+        // Order matters: clear trackedEntity BEFORE flyHome, else Cesium's
+        // tracking mode fights the home animation and the camera snaps.
         tearDownGhost()
         clearOrbit()
         viewer.camera.flyHome(HOME_FLY_SECONDS)
@@ -364,6 +379,9 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       const trackScratch = new Cartesian3()
       const positionProperty = new CallbackPositionProperty(
         (_time, result) => {
+          // We deliberately propagate to wall-clock `now`, ignoring the
+          // JulianDate Cesium passes us. That keeps tracking pinned to
+          // real time even when Cesium's internal clock drifts.
           const pos = propagateToGeodetic(satrec, new Date())
           if (!pos) return undefined
           return Cartesian3.fromDegrees(
@@ -378,17 +396,49 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
         ReferenceFrame.FIXED,
       )
 
-      ghostEntity = viewer.entities.add({
+      const thisGhost = viewer.entities.add({
         position: positionProperty,
         viewFrom: TRACK_VIEW_FROM,
       })
-      viewer.trackedEntity = ghostEntity
+      ghostEntity = thisGhost
+
+      // Explicit flyTo → trackedEntity. The previous code assigned
+      // trackedEntity directly and relied on Cesium's internal camera
+      // animation, but that fired reliably only when the user had
+      // already interacted with the scene. For route-based selection
+      // (/satellite/:id fresh load) the camera just stayed at home.
+      // flyTo guarantees a camera animation; engaging trackedEntity on
+      // completion makes the camera follow the moving satellite.
+      viewer.trackedEntity = undefined
+      // flyTo uses the entity's `viewFrom` when no `offset` is passed —
+      // which for satellites gives us a useful "slight below, trailing"
+      // vantage rather than Cesium's default top-down look.
+      void viewer
+        .flyTo(thisGhost, { duration: SELECT_FLY_SECONDS })
+        .then((ok: boolean) => {
+          // flyTo resolves `true` on completion and `false` when a later
+          // navigation cancelled it — treat both via seq as the guard.
+          if (!ok) return
+          if (seq !== selectionSeq) return
+          if (ghostEntity !== thisGhost) return
+          viewer.trackedEntity = thisGhost
+        })
+        .catch(() => {
+          // flyTo can reject if the viewer is destroyed mid-flight.
+          // Nothing to clean up: tearDownGhost handles the entity.
+        })
 
       // Orbit line last — independent of tracking.
       void drawOrbit(idx)
     }
 
-    applySelection(useSelectionStore.getState().selectedNoradId)
+    // On first mount, only engage selection if the store already has one
+    // (route-based deep link). Without this guard, an empty-selection
+    // mount would invoke flyHome, fighting either the initial camera
+    // setView in Globe.tsx or a concurrent route-driven selection.
+    const initialNoradId = useSelectionStore.getState().selectedNoradId
+    if (initialNoradId != null) applySelection(initialNoradId)
+
     const unsubscribe = useSelectionStore.subscribe((state, prevState) => {
       if (state.selectedNoradId !== prevState.selectedNoradId) {
         applySelection(state.selectedNoradId)
