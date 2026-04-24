@@ -15,6 +15,22 @@
  *     with `requestRenderMode` on. (Per-frame GPU work is tiny — 10k point
  *     billboards render in a single draw call.)
  *
+ * Bounded memory by construction:
+ *   - Only two samples ever exist per satellite (prev, next), in two
+ *     preallocated Float64Arrays. No per-tick allocations, no sample
+ *     accumulation. We do NOT use Cesium's SampledPositionProperty (which
+ *     would grow unbounded without removeSamples() calls).
+ *
+ * Timekeeping:
+ *   - prev/next sample timestamps are anchored to performance.now() at the
+ *     moment each tick fires, not accumulated by adding TICK_MS every tick.
+ *     setInterval jitter and tab-background throttling used to let the
+ *     bookkeeping clock drift from the real clock; the lerp alpha then
+ *     clamped to 1 on every frame and motion froze until drift burned off,
+ *     which is the "progressive choppiness after long uptime" symptom.
+ *   - On visibilitychange → visible, we reseed both samples so a
+ *     backgrounded-for-minutes tab snaps cleanly back to real time.
+ *
  * Other responsibilities:
  *   - Left-click picks → selection store.
  *   - Ghost entity + viewer.trackedEntity so camera zoom/orbit is relative
@@ -24,7 +40,9 @@
  *   - Points scale subtly with camera distance so they stay legible.
  *
  * TODO(server-side-propagation): Move SGP4 to a worker or backend for
- *   larger catalogs.
+ *   larger catalogs. At 10k sats × 1 Hz the main thread spends ~10-20 ms
+ *   every second inside satellite.js; it is the single biggest non-GPU
+ *   cost left in the render path.
  */
 
 import { useEffect } from 'react'
@@ -131,6 +149,8 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
 
     // --- Sample buffers --------------------------------------------------
     // Flat xyz float64 arrays for both prev and next samples. One alloc.
+    // Memory footprint is fixed for the lifetime of the mount: 2 × N × 3 ×
+    // 8 bytes. For N=10,000 that's ~480 KB — constant, no accumulation.
     const prev = new Float64Array(N * 3)
     const next = new Float64Array(N * 3)
     const valid = new Uint8Array(N) // 1 if this sat is propagating OK
@@ -157,25 +177,68 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       }
     }
 
-    // Seed both buffers so the first frame interpolates between real samples.
-    const now0 = new Date()
-    propagateInto(prev, now0)
-    propagateInto(next, new Date(now0.getTime() + TICK_MS))
+    /** Reseed both sample buffers from `performance.now()` — used on mount
+     *  and whenever we suspect the clocks have drifted (tab returning from
+     *  background). `prev` gets the current wall-clock position; `next`
+     *  gets the position TICK_MS in the future; alpha resets to 0. */
+    const reseedSamples = () => {
+      const t0 = performance.now()
+      const d0 = new Date()
+      propagateInto(prev, d0)
+      propagateInto(next, new Date(d0.getTime() + TICK_MS))
+      prevSampleMs = t0
+      nextSampleMs = t0 + TICK_MS
+    }
+
+    reseedSamples()
     for (let i = 0; i < N; i++) if (valid[i]) points[i].show = true
 
     // --- 1 Hz propagation ticker ----------------------------------------
+    // Anchoring prevSampleMs to the actual performance.now() at tick time
+    // (not nextSampleMs + TICK_MS) prevents drift between our interpolation
+    // clock and the wall clock we propagate against. Over tens of minutes
+    // setInterval jitter would otherwise accumulate enough error to pin
+    // alpha at 1 every frame — satellites look frozen between ticks and
+    // jump once per second. That was the "progressive choppiness" bug.
+    let lastTickCost = 0
     const tick = () => {
-      // Rotate: next → prev, compute a new next at (now + TICK).
+      const tickNow = performance.now()
       prev.set(next)
-      prevSampleMs = nextSampleMs
-      nextSampleMs = prevSampleMs + TICK_MS
+      prevSampleMs = tickNow
+      nextSampleMs = tickNow + TICK_MS
       propagateInto(next, new Date(Date.now() + TICK_MS))
       for (let i = 0; i < N; i++) {
         if (valid[i] && !points[i].show) points[i].show = true
         else if (!valid[i] && points[i].show) points[i].show = false
       }
+      lastTickCost = performance.now() - tickNow
     }
     const intervalId = window.setInterval(tick, TICK_MS)
+
+    // When the tab comes back from a long background throttle, setInterval
+    // may have skipped many firings. Rather than rely on the next tick to
+    // catch up (it only advances by TICK_MS), hard-reseed both samples.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') reseedSamples()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    // --- Dev-only telemetry ---------------------------------------------
+    // Once per minute log a compact health line. Sample count is fixed at
+    // 2*N by construction; if this number ever grows, someone reintroduced
+    // a SampledPositionProperty or forgot to cap a growing array.
+    const telemetryId = import.meta.env.DEV
+      ? window.setInterval(() => {
+          let validCount = 0
+          for (let i = 0; i < N; i++) if (valid[i]) validCount++
+          const bytes = prev.byteLength + next.byteLength + valid.byteLength
+          console.log(
+            `[SatelliteLayer] sats=${validCount}/${N} samples=${2 * N}` +
+              ` buffers=${(bytes / 1024).toFixed(0)}KB` +
+              ` lastTick=${lastTickCost.toFixed(1)}ms`,
+          )
+        }, 60_000)
+      : 0
 
     // --- Per-frame lerp pump --------------------------------------------
     const scratch = new Cartesian3()
@@ -335,6 +398,8 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     return () => {
       cancelAnimationFrame(rafId)
       window.clearInterval(intervalId)
+      if (telemetryId) window.clearInterval(telemetryId)
+      document.removeEventListener('visibilitychange', onVisibility)
       unsubscribe()
       handler.destroy()
       tearDownGhost()

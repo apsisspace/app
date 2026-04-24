@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'wouter'
 import { ChatPanel } from './components/ChatPanel'
 import { Globe } from './components/Globe'
 import { HelpModal } from './components/HelpModal'
@@ -37,6 +38,22 @@ function App() {
     })
     return unsub
   }, [])
+
+  // --- URL ↔ selection sync -------------------------------------------
+  // The root route lives at "/". When the user clicks a satellite we push
+  // /satellite/:noradId into history so the URL is shareable. When they
+  // close the panel (selection → null), we push "/" back. We only mutate
+  // the URL if it doesn't already match the selection, which keeps us
+  // from fighting SatelliteRoute's own "URL → selection" effect or
+  // triggering an infinite loop on back/forward navigation.
+  const [location, navigate] = useLocation()
+  useEffect(() => {
+    const expected =
+      selectedNoradId != null ? `/satellite/${selectedNoradId}` : '/'
+    if (location !== expected) {
+      navigate(expected)
+    }
+  }, [selectedNoradId, location, navigate])
 
   // Kick off the fade-out the moment the catalog arrives. Depending only on
   // `catalog` keeps this effect from re-running when `fadingOut` flips —
