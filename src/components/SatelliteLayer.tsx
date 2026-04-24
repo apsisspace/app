@@ -49,10 +49,12 @@ import { useEffect } from 'react'
 import { useCesium } from 'resium'
 import {
   ArcType,
+  BoundingSphere,
   CallbackPositionProperty,
   Cartesian3,
   Color,
   Entity,
+  HeadingPitchRange,
   NearFarScalar,
   PointPrimitiveCollection,
   ReferenceFrame,
@@ -97,6 +99,12 @@ const POINT_SCALE_BY_DISTANCE = new NearFarScalar(1.5e6, 1.3, 1.5e8, 0.7)
 const TRACK_VIEW_FROM = new Cartesian3(0, -3_000_000, 1_500_000)
 const HOME_FLY_SECONDS = 1.0
 const SELECT_FLY_SECONDS = 1.2
+// Camera framing when flying to a selected satellite. Range is distance
+// from the satellite along the view vector; pitch is looking slightly
+// down from the entity's local horizontal so Earth is visible in the
+// frame rather than just a dot against stars.
+const SELECT_PITCH_RAD = -Math.PI / 6 // -30°
+const SELECT_RANGE_M = 3_500_000 // 3500 km pullback — big enough to see LEO context
 
 /** Sentinel for a satellite whose SGP4 call failed (e.g. decayed). */
 const INVALID_SAMPLE = Number.NaN
@@ -402,31 +410,58 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       })
       ghostEntity = thisGhost
 
-      // Explicit flyTo → trackedEntity. The previous code assigned
-      // trackedEntity directly and relied on Cesium's internal camera
-      // animation, but that fired reliably only when the user had
-      // already interacted with the scene. For route-based selection
-      // (/satellite/:id fresh load) the camera just stayed at home.
-      // flyTo guarantees a camera animation; engaging trackedEntity on
-      // completion makes the camera follow the moving satellite.
+      // Compute a starting position for the flight. We need a concrete
+      // Cartesian3 here — we DO NOT use viewer.flyTo(entity), because
+      // that path goes through Cesium's DataSourceDisplay bounding-
+      // sphere lookup which only succeeds for entities that have a
+      // graphic (point, model, polyline, …). Our ghost entity has only
+      // a position property by design, so viewer.flyTo(ghost) rejects
+      // and the camera ends up stranded at whatever half-position
+      // Cesium arrived at before giving up — which was the user-
+      // reported "orbiting a random point in space" regression.
+      //
+      // camera.flyToBoundingSphere is the lower-level API: it takes an
+      // explicit sphere + HeadingPitchRange and doesn't consult any
+      // visualizer. It always flies.
+      const initialPos = propagateToGeodetic(satrec, new Date())
+      if (!initialPos) {
+        // Satellite already decayed / SGP4 error — leave the entity in
+        // place so tracking can still engage when propagation recovers,
+        // but don't try to fly.
+        void drawOrbit(idx)
+        return
+      }
+      const initialCartesian = Cartesian3.fromDegrees(
+        initialPos.longitude,
+        initialPos.latitude,
+        initialPos.height,
+      )
+      // A zero-radius sphere centered on the satellite's current
+      // position is enough — flyToBoundingSphere just needs a focus
+      // point; the offset controls the view geometry.
+      const flyToSphere = new BoundingSphere(initialCartesian, 0)
+
+      // Unset tracking BEFORE flying — otherwise Cesium's tracking
+      // loop fights the scripted flight and the camera snaps.
       viewer.trackedEntity = undefined
-      // flyTo uses the entity's `viewFrom` when no `offset` is passed —
-      // which for satellites gives us a useful "slight below, trailing"
-      // vantage rather than Cesium's default top-down look.
-      void viewer
-        .flyTo(thisGhost, { duration: SELECT_FLY_SECONDS })
-        .then((ok: boolean) => {
-          // flyTo resolves `true` on completion and `false` when a later
-          // navigation cancelled it — treat both via seq as the guard.
-          if (!ok) return
+      viewer.camera.flyToBoundingSphere(flyToSphere, {
+        duration: SELECT_FLY_SECONDS,
+        offset: new HeadingPitchRange(0, SELECT_PITCH_RAD, SELECT_RANGE_M),
+        complete: () => {
+          // Drop stale completions: the user may have picked a new
+          // satellite (or cleared) while we were in flight.
           if (seq !== selectionSeq) return
           if (ghostEntity !== thisGhost) return
+          // Engaging trackedEntity here (not on selection) guarantees
+          // the camera handed off from "arrived at initial position"
+          // to "follow entity" without a one-frame jump.
           viewer.trackedEntity = thisGhost
-        })
-        .catch(() => {
-          // flyTo can reject if the viewer is destroyed mid-flight.
-          // Nothing to clean up: tearDownGhost handles the entity.
-        })
+        },
+        cancel: () => {
+          // Flight was replaced by a newer one — nothing to do, the
+          // newer applySelection will engage tracking on its own.
+        },
+      })
 
       // Orbit line last — independent of tracking.
       void drawOrbit(idx)
