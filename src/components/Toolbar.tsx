@@ -31,7 +31,8 @@ export function Toolbar() {
         onClick={cycleEarthMode}
       >
         <GlobeIcon />
-        <span className="pl-1.5 pr-1 text-[10px] uppercase tracking-widest">
+        {/* Label visible on desktop only — icon-only on mobile to save space */}
+        <span className="hidden pl-1.5 pr-1 text-[10px] uppercase tracking-widest md:inline">
           {EARTH_MODE_LABEL[earthMode]}
         </span>
       </ToolbarButton>
@@ -78,8 +79,9 @@ function ToolbarButton({
   active?: boolean
   disabled?: boolean
 }) {
+  // min 44×44px touch target on mobile (Apple HIG); shrinks to h-8 on desktop.
   const base =
-    'flex h-8 items-center px-2 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#00d4ff]'
+    'flex min-h-[44px] min-w-[44px] items-center justify-center px-2 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#00d4ff] md:min-h-[2rem] md:min-w-0 md:h-8 md:justify-start'
   const stateClass = disabled
     ? 'cursor-not-allowed text-white/25'
     : active

@@ -12,7 +12,9 @@ export function WelcomeTip() {
   return (
     <div
       className={
-        'pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 transform select-none font-mono text-[11px] uppercase tracking-widest text-white/50 transition-opacity duration-700 ' +
+        // bottom-20 on mobile clears the 44px-target toolbar + safe area margin.
+        // bottom-16 restores the original desktop spacing.
+        'pointer-events-none absolute bottom-20 left-1/2 -translate-x-1/2 transform select-none font-mono text-[11px] uppercase tracking-widest text-white/50 transition-opacity duration-700 md:bottom-16 ' +
         (hasInteracted ? 'opacity-0' : 'opacity-100')
       }
       aria-hidden={hasInteracted}
