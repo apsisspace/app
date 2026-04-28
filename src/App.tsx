@@ -12,7 +12,6 @@ import { WelcomeTip } from './components/WelcomeTip'
 import { useSatelliteCatalog } from './hooks/useSatelliteCatalog'
 import {
   useSelectedNoradId,
-  useSelectionActions,
   findSelected,
 } from './hooks/useSelectedSatellite'
 import { useSelectionStore } from './stores/selection'
@@ -24,7 +23,6 @@ function App() {
   const { data: catalog, isPending, failureCount, refetch } = useSatelliteCatalog()
   const selectedNoradId = useSelectedNoradId()
   const selected = catalog ? findSelected(catalog, selectedNoradId) : null
-  const { clear } = useSelectionActions()
 
   // For the mobile legend overlay dismiss
   const legendOpen = useUIStore((s) => s.legendOpen)
@@ -139,10 +137,16 @@ function App() {
           Mobile:  fixed bottom drawer, slides up, dims the globe behind it. */}
       {selected && (
         <>
-          {/* Dim overlay — mobile only. Tap to close. */}
+          {/* Dim overlay — mobile only, visual only. pointer-events: none so
+              taps pass through to the Cesium canvas, where SatelliteLayer's
+              LEFT_CLICK handler already calls clear() on empty-space taps.
+              A pointer-events-auto overlay here would catch the browser's
+              synthetic click that fires after the touchend that selected the
+              satellite (React commits the overlay in a microtask, the click
+              arrives as a macrotask, hitting the overlay before the user
+              can react) — causing the panel to flash open and instantly close. */}
           <div
-            className="pointer-events-auto md:hidden fixed inset-0 z-20 bg-black/40"
-            onClick={clear}
+            className="pointer-events-none md:hidden fixed inset-0 z-20 bg-black/40"
             aria-hidden
           />
           {/* Panel wrapper */}
