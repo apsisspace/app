@@ -11,3 +11,12 @@ body,
   color: #fff;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 250ms ease-out;
+}

@@ -111,7 +111,11 @@ export function SidePanel({ satellite }: SidePanelProps) {
   const setChatOpen = useUIStore((s) => s.setChatOpen)
 
   return (
-    <aside className="pointer-events-auto flex w-80 flex-col gap-3 border border-white/10 bg-[#0a0a0a]/95 p-4 font-mono text-xs text-white/80">
+    <aside className="pointer-events-auto flex w-full md:w-80 flex-col gap-3 border border-white/10 bg-[#0a0a0a]/95 p-4 font-mono text-xs text-white/80">
+      {/* Drag handle — visual only, mobile only */}
+      <div className="md:hidden -mt-1 mb-1 flex justify-center" aria-hidden>
+        <div className="h-1 w-10 rounded-full bg-white/20" />
+      </div>
       <header className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold tracking-wide text-[#00d4ff]">
@@ -134,7 +138,7 @@ export function SidePanel({ satellite }: SidePanelProps) {
           type="button"
           onClick={clear}
           aria-label="Close"
-          className="cursor-pointer text-white/50 hover:text-white"
+          className="flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center text-white/50 hover:text-white md:min-h-0 md:min-w-0"
         >
           ×
         </button>

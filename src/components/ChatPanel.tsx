@@ -3,6 +3,12 @@
  * expanded it's a ~400×500 panel with scrollable history, typing
  * indicator, distinct error pills, and a 500-char input with counter.
  *
+ * Mobile behaviour:
+ *   - Collapsed button sits above the bottom toolbar (~80px from bottom)
+ *     so it doesn't overlap toolbar touch targets.
+ *   - Expanded panel becomes a fixed full-screen drawer (height: 100dvh
+ *     so the layout shrinks correctly when the on-screen keyboard opens).
+ *
  * Chat state and the fetch to /api/query live in useChat. This file is
  * purely presentational — it never touches Cesium or the selection
  * store, so its re-renders cannot cause the globe to re-render.
@@ -42,8 +48,6 @@ export function ChatPanel({ catalog }: ChatPanelProps) {
     return () => window.removeEventListener('keydown', handler)
   }, [setOpen])
 
-  // Only read the name when we actually need it, cheaply — resolved here
-  // because catalog+id already flow into this component.
   const selectedName =
     catalog && selectedNoradId != null
       ? (catalog.find((s) => s.tle.noradId === selectedNoradId)?.tle.name ?? null)
@@ -70,11 +74,13 @@ export function ChatPanel({ catalog }: ChatPanelProps) {
 
   if (!open) {
     return (
-      <div className="pointer-events-auto absolute bottom-4 right-4">
+      // bottom-20 (80px) on mobile clears the ~52px toolbar + 16px margin.
+      // bottom-4 restores the original desktop position.
+      <div className="pointer-events-auto absolute bottom-20 right-4 md:bottom-4">
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="cursor-pointer border border-[#00d4ff]/40 bg-[#0a0a0a]/95 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[#00d4ff] hover:border-[#00d4ff] hover:bg-[#00d4ff]/10"
+          className="flex min-h-[44px] cursor-pointer items-center border border-[#00d4ff]/40 bg-[#0a0a0a]/95 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[#00d4ff] hover:border-[#00d4ff] hover:bg-[#00d4ff]/10"
           aria-label="Open Apsis AI chat"
         >
           ask apsis
@@ -84,9 +90,12 @@ export function ChatPanel({ catalog }: ChatPanelProps) {
   }
 
   return (
-    <div className="pointer-events-auto absolute bottom-4 right-4 flex h-[500px] w-[400px] flex-col border border-white/10 bg-[#0a0a0a]/95 font-mono text-xs text-white/85">
+    // Mobile: fixed full-screen drawer, height tracks the visual viewport
+    // so the composer stays above the on-screen keyboard (100dvh shrinks
+    // when the keyboard appears). Desktop: absolute 400×500 panel.
+    <div className="pointer-events-auto fixed inset-0 z-40 flex h-dvh flex-col md:absolute md:inset-auto md:bottom-4 md:right-4 md:z-auto md:h-[500px] md:w-[400px] border border-white/10 bg-[#0a0a0a]/95 font-mono text-xs text-white/85">
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+      <header className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold tracking-[0.2em] uppercase text-[#00d4ff]">
             Apsis AI
@@ -101,7 +110,7 @@ export function ChatPanel({ catalog }: ChatPanelProps) {
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Close chat"
-            className="cursor-pointer text-white/50 hover:text-white"
+            className="flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center text-white/50 hover:text-white md:min-h-0 md:min-w-0"
           >
             ×
           </button>
@@ -124,13 +133,14 @@ export function ChatPanel({ catalog }: ChatPanelProps) {
         {isSending && <TypingIndicator />}
       </div>
 
-      {/* Composer */}
+      {/* Composer — shrink-0 keeps it pinned at the bottom when keyboard opens */}
       <form
         onSubmit={(e) => {
           e.preventDefault()
           submit()
         }}
-        className="border-t border-white/10 px-3 py-2"
+        className="shrink-0 border-t border-white/10 px-3 py-2"
+        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
       >
         <div className="flex items-end gap-2">
           <textarea

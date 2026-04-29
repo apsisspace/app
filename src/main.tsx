@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Switch, Route } from 'wouter'
+import { Switch, Route, useRoute } from 'wouter'
 import { HelmetProvider } from 'react-helmet-async'
 import './index.css'
 import App from './App.tsx'
@@ -22,6 +22,24 @@ const queryClient = new QueryClient({
   },
 })
 
+// Keep App (and the Globe inside it) mounted for both / and /satellite/:id.
+// Previously the Switch unmounted App (and thus Globe/Cesium) on every
+// selection-driven route change, causing the Cesium viewer to be recreated
+// and Earth mode to reset visually. With this structure Globe is a stable
+// singleton and SatelliteRoute is a pure overlay (Helmet + 404 + selection
+// sync) that sits on top without owning its own viewer.
+function GlobeTracker() {
+  const [isSatellite] = useRoute('/satellite/:norad_id')
+  const [isHome] = useRoute('/')
+  if (!isSatellite && !isHome) return <NotFoundRoute />
+  return (
+    <>
+      <App />
+      <Route path="/satellite/:norad_id" component={SatelliteRoute} />
+    </>
+  )
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
@@ -30,9 +48,7 @@ createRoot(document.getElementById('root')!).render(
           <Switch>
             <Route path="/about" component={About} />
             <Route path="/satellites" component={SatellitesIndexRoute} />
-            <Route path="/satellite/:norad_id" component={SatelliteRoute} />
-            <Route path="/" component={App} />
-            <Route component={NotFoundRoute} />
+            <Route component={GlobeTracker} />
           </Switch>
         </QueryClientProvider>
       </HelmetProvider>

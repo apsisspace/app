@@ -24,11 +24,14 @@ function App() {
   const selectedNoradId = useSelectedNoradId()
   const selected = catalog ? findSelected(catalog, selectedNoradId) : null
 
+  // For the mobile legend overlay dismiss
+  const legendOpen = useUIStore((s) => s.legendOpen)
+  const toggleLegend = useUIStore((s) => s.toggleLegend)
+
   const [showLoading, setShowLoading] = useState(true)
   const [fadingOut, setFadingOut] = useState(false)
 
   // First-run welcome tip fades out on the user's first meaningful action.
-  // We subscribe once; zustand guarantees the unsubscribe cleanup path.
   useEffect(() => {
     const mark = useUIStore.getState().markInteracted
     const unsub = useSelectionStore.subscribe((s, prev) => {
@@ -40,19 +43,13 @@ function App() {
   }, [])
 
   // --- URL ↔ selection sync -------------------------------------------
-  // The root route lives at "/". When the user clicks a satellite we push
-  // /satellite/:noradId into history so the URL is shareable. When they
-  // close the panel (selection → null), we push "/" back.
+  // When the user clicks a satellite we push /satellite/:noradId into history.
+  // When they close the panel (selection → null), we push "/" back.
   //
-  // The tricky case is a cold load of /satellite/:id. App's effects run
-  // BEFORE SatelliteRoute's effects (children first), so we see
-  // selectedNoradId=null while the URL already says /satellite/25544.
-  // A naive sync would preemptively navigate(`/`) and SatelliteRoute
-  // would never get its turn. The ref below tracks whether we've ever
-  // observed a non-null selection — before that happens, a null
-  // selection on a /satellite/ URL is interpreted as "route is still
-  // initializing" and we leave the URL alone. After the first real
-  // selection we accept null as "user closed the panel" and navigate.
+  // Cold load of /satellite/:id: App's effects run before SatelliteRoute's
+  // effects. We track whether we've ever observed a non-null selection;
+  // before that happens a null selection on a /satellite/ URL is "route
+  // still initializing" and we leave the URL alone.
   const [location, navigate] = useLocation()
   const hasSelectionEverSet = useRef(false)
   useEffect(() => {
@@ -73,11 +70,7 @@ function App() {
     }
   }, [selectedNoradId, location, navigate])
 
-  // Kick off the fade-out the moment the catalog arrives. Depending only on
-  // `catalog` keeps this effect from re-running when `fadingOut` flips —
-  // earlier versions had `fadingOut` in the deps, which caused the cleanup
-  // to clearTimeout the 300ms unmount timer before it could fire, leaving
-  // the overlay in the DOM at opacity-0 but with pointer-events-auto.
+  // Kick off the fade-out the moment the catalog arrives.
   useEffect(() => {
     if (!catalog) return
     setFadingOut(true)
@@ -87,8 +80,6 @@ function App() {
     return () => clearTimeout(timer)
   }, [catalog])
 
-  // We retry indefinitely, so the query never settles into a terminal error
-  // state. failureCount lets us distinguish first load vs. stuck retrying.
   let statusText: string | null = null
   if (catalog) {
     statusText = `${catalog.length.toLocaleString()} satellites`
@@ -100,8 +91,33 @@ function App() {
         {catalog && <SatelliteLayer satellites={catalog} />}
       </Globe>
 
-      {/* Top-left brand mark — deliberately small, not a dominant logo. */}
-      <header className="pointer-events-none absolute left-4 top-3 select-none font-mono text-white">
+      {/* ── MOBILE TOP BAR (< 768px) ─────────────────────────────────────
+          Thin header row + full-width search, stacked in a column.
+          Hidden on desktop (md:hidden). Safe-area-inset-top handles iOS notch. */}
+      <div
+        className="md:hidden pointer-events-none absolute left-0 right-0 top-0 z-10 flex flex-col"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
+        {/* Thin brand row */}
+        <div className="flex items-center px-3 py-1.5 select-none font-mono">
+          <span className="text-[9px] font-semibold tracking-[0.3em] uppercase text-[#00d4ff]/80">
+            A·S
+          </span>
+          {statusText && (
+            <span className="ml-2 text-[8px] uppercase tracking-widest text-white/30">
+              {statusText}
+            </span>
+          )}
+        </div>
+        {/* Full-width search */}
+        <div className="pointer-events-none px-3 pb-2">
+          {catalog && <SearchBar catalog={catalog} />}
+        </div>
+      </div>
+
+      {/* ── DESKTOP HEADER (≥ 768px) ─────────────────────────────────────
+          Top-left brand mark — deliberately small, not a dominant logo. */}
+      <header className="pointer-events-none absolute left-4 top-3 hidden select-none font-mono text-white md:block">
         <h1 className="text-[10px] font-semibold tracking-[0.3em] uppercase text-[#00d4ff]/80">
           Apsis<span className="text-[#00d4ff]/40"> · </span>Space
         </h1>
@@ -110,38 +126,89 @@ function App() {
         </p>
       </header>
 
-      {/* Top-center search */}
-      <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2">
+      {/* ── DESKTOP SEARCH (≥ 768px) ─────────────────────────────────────
+          Centered horizontally at the top. */}
+      <div className="pointer-events-none absolute left-1/2 top-4 hidden -translate-x-1/2 md:block">
         {catalog && <SearchBar catalog={catalog} />}
       </div>
 
-      {/* Right-side panel */}
+      {/* ── SIDE PANEL ───────────────────────────────────────────────────
+          Desktop: absolute right-4 top-4 (320px wide).
+          Mobile:  fixed bottom drawer, slides up, dims the globe behind it. */}
       {selected && (
-        <div className="pointer-events-none absolute right-4 top-4">
-          <SidePanel satellite={selected} />
-        </div>
+        <>
+          {/* Dim overlay — mobile only, visual only. pointer-events: none so
+              taps pass through to the Cesium canvas, where SatelliteLayer's
+              LEFT_CLICK handler already calls clear() on empty-space taps.
+              A pointer-events-auto overlay here would catch the browser's
+              synthetic click that fires after the touchend that selected the
+              satellite (React commits the overlay in a microtask, the click
+              arrives as a macrotask, hitting the overlay before the user
+              can react) — causing the panel to flash open and instantly close. */}
+          <div
+            className="pointer-events-none md:hidden fixed inset-0 z-20 bg-black/40"
+            aria-hidden
+          />
+          {/* Panel wrapper */}
+          <div
+            className="pointer-events-none fixed bottom-0 left-0 right-0 z-30 max-h-[70vh] overflow-y-auto md:absolute md:bottom-auto md:left-auto md:right-4 md:top-4 md:z-auto md:max-h-none md:overflow-visible"
+          >
+            <div className="animate-slide-up md:animate-none">
+              <SidePanel satellite={selected} />
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Bottom-left legend */}
-      <div className="pointer-events-none absolute bottom-4 left-4">
+      {/* ── LEGEND ───────────────────────────────────────────────────────
+          Desktop: bottom-left panel (existing behaviour).
+          Mobile:  fixed popup at top-right, below the search bar.
+                   Tap the legend icon in the toolbar to toggle.
+                   A transparent overlay behind it catches "tap outside". */}
+
+      {/* Mobile legend overlay — catches taps outside to dismiss */}
+      {legendOpen && (
+        <div
+          className="pointer-events-auto md:hidden fixed inset-0 z-[25]"
+          onClick={toggleLegend}
+          aria-hidden
+        />
+      )}
+
+      {/* Mobile legend popup — top-right, above the overlay */}
+      <div
+        className="pointer-events-none md:hidden fixed right-4 z-[26]"
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 80px)' }}
+      >
         <Legend catalog={catalog} />
       </div>
 
-      {/* Bottom-center toolbar */}
-      <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
+      {/* Desktop legend — bottom-left */}
+      <div className="pointer-events-none absolute bottom-4 left-4 hidden md:block">
+        <Legend catalog={catalog} />
+      </div>
+
+      {/* ── BOTTOM TOOLBAR ───────────────────────────────────────────────
+          Centered; respects iOS home-indicator safe area. */}
+      <div
+        className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+        style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         <Toolbar />
       </div>
 
-      {/* First-run tip above the toolbar — fades once the user interacts. */}
+      {/* First-run tip above the toolbar. bottom-20 on mobile avoids
+          overlapping the toolbar's larger touch targets. */}
       <WelcomeTip />
 
-      {/* Bottom-right AI chat — independent from the Cesium tree */}
+      {/* ── AI CHAT ──────────────────────────────────────────────────────
+          ChatPanel handles its own position (see ChatPanel.tsx). */}
       <ChatPanel catalog={catalog} />
 
       {/* About / help modal */}
       <HelpModal />
 
-      {/* Overlays */}
+      {/* ── OVERLAYS ─────────────────────────────────────────────────────*/}
       {!catalog && failureCount > 0 && (
         <div className="pointer-events-auto absolute inset-0 z-50 flex flex-col items-center justify-center bg-black font-mono text-xs text-white">
           <p className="mb-4 text-white/80">Couldn't load the satellite catalog. Check your connection and try again.</p>

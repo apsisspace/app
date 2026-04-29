@@ -40,7 +40,7 @@ export function SearchBar({ catalog }: SearchBarProps) {
   }
 
   return (
-    <div className="pointer-events-auto w-80 font-mono text-xs">
+    <div className="pointer-events-auto w-full md:w-80 font-mono text-xs">
       <input
         type="text"
         value={query}
