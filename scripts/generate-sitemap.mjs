@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const SOURCE = resolve(here, '..', 'src', 'data', 'notableSatellites.ts')
+const ARTICLES_SOURCE = resolve(here, '..', 'src', 'data', 'articles.ts')
 const OUTPUT = resolve(here, '..', 'public', 'sitemap.xml')
 const BASE_URL = 'https://app.apsisspace.com'
 
@@ -36,6 +37,19 @@ function readNoradIds(path) {
     ids.add(Number(m[1]))
   }
   return [...ids].sort((a, b) => a - b)
+}
+
+/** Extract /learn article slugs. articles.ts is generated JSON-ish, so the
+ *  top-level "slug": "..." shape is stable and safe to regex. */
+function readArticleSlugs(path) {
+  const text = readFileSync(path, 'utf8')
+  const slugs = new Set()
+  const re = /"slug":\s*"([a-z0-9-]+)"/g
+  let m
+  while ((m = re.exec(text)) !== null) {
+    slugs.add(m[1])
+  }
+  return [...slugs].sort()
 }
 
 function urlEntry(loc, priority, changefreq, lastmod) {
@@ -56,11 +70,18 @@ function main() {
     process.exit(1)
   }
 
+  const slugs = readArticleSlugs(ARTICLES_SOURCE)
+
   const today = new Date().toISOString().slice(0, 10)
   const entries = [
     urlEntry(`${BASE_URL}/`, '1.0', 'weekly', today),
+    urlEntry(`${BASE_URL}/learn`, '0.8', 'weekly', today),
+    urlEntry(`${BASE_URL}/stats`, '0.7', 'daily', today),
     urlEntry(`${BASE_URL}/about`, '0.7', 'monthly', today),
     urlEntry(`${BASE_URL}/satellites`, '0.7', 'weekly', today),
+    ...slugs.map((slug) =>
+      urlEntry(`${BASE_URL}/learn/${slug}`, '0.7', 'monthly', today),
+    ),
     ...ids.map((id) =>
       urlEntry(`${BASE_URL}/satellite/${id}`, '0.6', 'daily', today),
     ),

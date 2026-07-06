@@ -18,6 +18,12 @@ interface UIState {
    */
   hasInteracted: boolean
   chatOpen: boolean
+  /**
+   * Active constellation/group filter id (see lib/groups). null = show all.
+   * SatelliteLayer subscribes to this imperatively to toggle point visibility
+   * without a React re-render of the globe.
+   */
+  groupFilter: string | null
 
   cycleEarthMode: () => void
   setEarthMode: (m: EarthMode) => void
@@ -26,6 +32,7 @@ interface UIState {
   setHelpOpen: (open: boolean) => void
   markInteracted: () => void
   setChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void
+  setGroupFilter: (id: string | null) => void
 }
 
 const EARTH_MODE_ORDER: readonly EarthMode[] = ['minimal', 'full', 'night']
@@ -36,6 +43,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   helpOpen: false,
   hasInteracted: false,
   chatOpen: false,
+  groupFilter: null,
 
   cycleEarthMode: () => {
     const cur = get().earthMode
@@ -48,6 +56,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   setLegendOpen: (legendOpen) => set({ legendOpen }),
   setHelpOpen: (helpOpen) => set({ helpOpen }),
   setChatOpen: (updater) => set((state) => ({ chatOpen: typeof updater === 'function' ? updater(state.chatOpen) : updater })),
+  setGroupFilter: (groupFilter) => set({ groupFilter }),
   markInteracted: () => {
     if (!get().hasInteracted) set({ hasInteracted: true })
   },

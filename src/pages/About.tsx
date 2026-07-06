@@ -1,23 +1,27 @@
 import { Link } from 'wouter'
+import { Helmet } from 'react-helmet-async'
+import { SiteNav, SiteFooter, PageShell } from '../components/SiteChrome'
+
+const CANONICAL = 'https://app.apsisspace.com/about'
+const TITLE = 'About — Apsis Space'
+const DESCRIPTION =
+  'Apsis Space is an AI-native, real-time 3D satellite tracker. Here is what it does, how it works, and the data + tech behind it.'
 
 export function About() {
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-[#00d4ff]/30">
-      {/* Top Navigation */}
-      <nav className="mx-auto flex max-w-[680px] items-center justify-between p-4 font-mono text-[11px] uppercase tracking-widest text-white/50">
-        <Link href="/" className="hover:text-[#00d4ff] transition-colors">
-          &larr; Back to tracker
-        </Link>
-      </nav>
+    <PageShell>
+      <Helmet>
+        <title>{TITLE}</title>
+        <meta name="description" content={DESCRIPTION} />
+        <link rel="canonical" href={CANONICAL} />
+        <meta property="og:title" content={TITLE} />
+        <meta property="og:description" content={DESCRIPTION} />
+        <meta property="og:url" content={CANONICAL} />
+      </Helmet>
 
-      <main className="mx-auto max-w-[680px] px-6 py-12 pb-24 font-sans">
-        {/* Header */}
-        <header className="mb-12 select-none font-mono">
-          <h1 className="text-xl font-semibold tracking-[0.3em] uppercase text-[#00d4ff]/80">
-            Apsis<span className="text-[#00d4ff]/40"> · </span>Space
-          </h1>
-        </header>
+      <SiteNav maxWidth="max-w-[680px]" />
 
+      <main className="mx-auto max-w-[680px] px-6 py-12 font-sans">
         {/* Hero */}
         <section className="mb-12">
           <p className="text-2xl font-light leading-snug text-white/90">
@@ -27,8 +31,8 @@ export function About() {
         </section>
 
         {/* What it does */}
-        <section className="mb-12 space-y-4 text-white/70 leading-relaxed">
-          <h2 className="mb-4 font-mono text-xs font-semibold tracking-widest uppercase text-[#00d4ff]">
+        <section className="mb-12 space-y-4 leading-relaxed text-white/70">
+          <h2 className="mb-4 font-mono text-xs font-semibold uppercase tracking-widest text-[#00d4ff]">
             What it does
           </h2>
           <p>
@@ -40,19 +44,28 @@ export function About() {
           <p>
             Unlike traditional trackers that present you with static maps or
             overwhelming spreadsheets of data, Apsis is designed to be explored.
-            You can search for specific payloads, filter by orbit type, and follow
-            satellites in real-time as they cross the globe.
+            You can search for specific payloads, filter by constellation, follow
+            satellites in real-time as they cross the globe, and read up on how it
+            all works in the{' '}
+            <Link href="/learn" className="text-[#00d4ff] hover:underline">
+              Learn
+            </Link>{' '}
+            hub.
           </p>
           <p>
-            Built-in AI capabilities allow you to ask natural language questions
-            about the satellites you are viewing, demystifying the hardware operating
-            above our heads.
+            Built-in AI capabilities let you ask natural-language questions about
+            the satellites you are viewing, demystifying the hardware operating
+            above our heads. Curious how crowded orbit has become? The{' '}
+            <Link href="/stats" className="text-[#00d4ff] hover:underline">
+              State of Orbit
+            </Link>{' '}
+            page breaks down the whole catalog at a glance.
           </p>
         </section>
 
         {/* How it works */}
-        <section className="mb-12 space-y-4 text-white/70 leading-relaxed">
-          <h2 className="mb-4 font-mono text-xs font-semibold tracking-widest uppercase text-[#00d4ff]">
+        <section className="mb-12 space-y-4 leading-relaxed text-white/70">
+          <h2 className="mb-4 font-mono text-xs font-semibold uppercase tracking-widest text-[#00d4ff]">
             How it works
           </h2>
           <p>
@@ -72,23 +85,37 @@ export function About() {
           </p>
         </section>
 
-        {/* Who built this */}
-        <section className="mb-12 space-y-4 text-white/70 leading-relaxed">
-          <h2 className="mb-4 font-mono text-xs font-semibold tracking-widest uppercase text-[#00d4ff]">
-            Who built this
+        {/* Data & credits */}
+        <section className="mb-12 space-y-4 leading-relaxed text-white/70">
+          <h2 className="mb-4 font-mono text-xs font-semibold uppercase tracking-widest text-[#00d4ff]">
+            Data &amp; credits
           </h2>
           <p>
-            Apsis Space is built and maintained by [AUTHOR_NAME]. [AUTHOR_BIO]
+            Orbital data comes from{' '}
+            <a
+              href="https://celestrak.org"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[#00d4ff] hover:underline"
+            >
+              Celestrak
+            </a>
+            , maintained by Dr. T.S. Kelso, drawing on the public catalog
+            published by the U.S. Space Force. Propagation uses the open-source{' '}
+            <code className="text-white/80">satellite.js</code> implementation of
+            SGP4/SDP4, and the globe is rendered with the open-source CesiumJS
+            engine. Apsis Space is an independent project, not affiliated with NASA,
+            ESA, or any satellite operator.
           </p>
         </section>
 
         {/* Contact */}
-        <section className="mb-24 space-y-4 text-white/70 leading-relaxed">
-          <h2 className="mb-4 font-mono text-xs font-semibold tracking-widest uppercase text-[#00d4ff]">
+        <section className="mb-4 space-y-4 leading-relaxed text-white/70">
+          <h2 className="mb-4 font-mono text-xs font-semibold uppercase tracking-widest text-[#00d4ff]">
             Contact
           </h2>
           <p>
-            For questions, feedback, or support, please reach out via email:
+            Questions, feedback, or corrections are welcome:
             <br />
             <a
               href="mailto:hello@apsisspace.com"
@@ -98,25 +125,9 @@ export function About() {
             </a>
           </p>
         </section>
-
-        {/* Footer */}
-        <footer className="border-t border-white/10 pt-8 font-mono text-[10px] uppercase tracking-widest text-white/40 flex justify-between items-center">
-          <div>&copy; {new Date().getFullYear()} Apsis Space</div>
-          <div className="flex items-center gap-4">
-            <Link href="/satellites" className="text-[#00d4ff] hover:underline">
-              Notable satellites
-            </Link>
-            <a
-              href="https://apsisspace.com"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[#00d4ff] hover:underline"
-            >
-              apsisspace.com
-            </a>
-          </div>
-        </footer>
       </main>
-    </div>
+
+      <SiteFooter maxWidth="max-w-[680px]" />
+    </PageShell>
   )
 }

@@ -5,6 +5,7 @@
  */
 
 import { useEffect } from 'react'
+import { Link } from 'wouter'
 import { useUIStore } from '../stores/ui'
 
 export function HelpModal() {
@@ -66,16 +67,44 @@ export function HelpModal() {
           </p>
         </div>
 
-        <footer className="mt-4 border-t border-white/10 pt-3 text-[10px] uppercase tracking-widest text-white/40">
+        <nav className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-white/10 pt-3 text-[10px] uppercase tracking-widest text-white/50">
+          <Link
+            href="/learn"
+            onClick={() => setHelpOpen(false)}
+            className="hover:text-[#00d4ff]"
+          >
+            Learn
+          </Link>
+          <Link
+            href="/stats"
+            onClick={() => setHelpOpen(false)}
+            className="hover:text-[#00d4ff]"
+          >
+            State of Orbit
+          </Link>
+          <Link
+            href="/satellites"
+            onClick={() => setHelpOpen(false)}
+            className="hover:text-[#00d4ff]"
+          >
+            Notable satellites
+          </Link>
+          <Link
+            href="/about"
+            onClick={() => setHelpOpen(false)}
+            className="hover:text-[#00d4ff]"
+          >
+            About
+          </Link>
           <a
             href="https://apsisspace.com"
             target="_blank"
             rel="noreferrer"
-            className="text-[#00d4ff] hover:underline"
+            className="ml-auto text-[#00d4ff] hover:underline"
           >
             apsisspace.com
           </a>
-        </footer>
+        </nav>
       </div>
     </div>
   )

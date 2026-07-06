@@ -70,6 +70,8 @@ import {
 } from '../lib/propagator'
 import { tleMetadata } from '../lib/tleMetadata'
 import { useSelectionStore } from '../stores/selection'
+import { useUIStore } from '../stores/ui'
+import { groupById, matchesGroup } from '../lib/groups'
 import {
   BAND_COLORS,
   BAND_ORBIT_COLORS,
@@ -170,6 +172,38 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     let prevSampleMs = performance.now()
     let nextSampleMs = prevSampleMs + TICK_MS
 
+    // --- Constellation filter visibility --------------------------------
+    // `matches[i] === 1` means satellite i passes the active group filter
+    // (or no filter is active). Point visibility is the AND of "propagating
+    // OK" and "passes the filter" — plus the currently-selected satellite,
+    // which we always keep on-screen so a filter never hides the object the
+    // side panel is describing. currentHighlight is declared here (rather
+    // than beside the selection logic below) so refreshVisibility can close
+    // over it before the first call.
+    const matches = new Uint8Array(N)
+    matches.fill(1)
+    let currentHighlight: number | null = null
+    let activeFilter: string | null = useUIStore.getState().groupFilter
+
+    const computeMatches = () => {
+      const g = groupById(activeFilter)
+      if (!g) {
+        matches.fill(1)
+        return
+      }
+      for (let i = 0; i < N; i++) {
+        matches[i] = matchesGroup(g, satellites[i].tle.name) ? 1 : 0
+      }
+    }
+
+    const refreshVisibility = () => {
+      for (let i = 0; i < N; i++) {
+        const shouldShow =
+          valid[i] === 1 && (matches[i] === 1 || i === currentHighlight)
+        if (points[i].show !== shouldShow) points[i].show = shouldShow
+      }
+    }
+
     function propagateInto(buf: Float64Array, date: Date) {
       for (let i = 0; i < N; i++) {
         const pos = propagateToGeodetic(satrecs[i], date)
@@ -204,7 +238,8 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     }
 
     reseedSamples()
-    for (let i = 0; i < N; i++) if (valid[i]) points[i].show = true
+    computeMatches()
+    refreshVisibility()
 
     // --- 1 Hz propagation ticker ----------------------------------------
     // Anchoring prevSampleMs to the actual performance.now() at tick time
@@ -220,10 +255,7 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       prevSampleMs = tickNow
       nextSampleMs = tickNow + TICK_MS
       propagateInto(next, new Date(Date.now() + TICK_MS))
-      for (let i = 0; i < N; i++) {
-        if (valid[i] && !points[i].show) points[i].show = true
-        else if (!valid[i] && points[i].show) points[i].show = false
-      }
+      refreshVisibility()
       lastTickCost = performance.now() - tickNow
     }
     const intervalId = window.setInterval(tick, TICK_MS)
@@ -232,7 +264,10 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     // may have skipped many firings. Rather than rely on the next tick to
     // catch up (it only advances by TICK_MS), hard-reseed both samples.
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') reseedSamples()
+      if (document.visibilityState === 'visible') {
+        reseedSamples()
+        refreshVisibility()
+      }
     }
     document.addEventListener('visibilitychange', onVisibility)
 
@@ -334,7 +369,6 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
     // flight completions instead of stamping trackedEntity on a ghost
     // that's already been torn down.
     let selectionSeq = 0
-    let currentHighlight: number | null = null
     let ghostEntity: Entity | null = null
 
     const tearDownGhost = () => {
@@ -359,6 +393,9 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
 
       if (noradId == null) {
         currentHighlight = null
+        // A filter may have kept the just-deselected point visible only
+        // because it was selected; re-evaluate now that it isn't.
+        refreshVisibility()
         // Order matters: clear trackedEntity BEFORE flyHome, else Cesium's
         // tracking mode fights the home animation and the camera snaps.
         tearDownGhost()
@@ -370,6 +407,7 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       const idx = indexByNoradId.get(noradId)
       if (idx == null) {
         currentHighlight = null
+        refreshVisibility()
         tearDownGhost()
         clearOrbit()
         return
@@ -381,6 +419,9 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       p.outlineColor = SELECTED_OUTLINE
       p.outlineWidth = SELECTED_OUTLINE_WIDTH
       currentHighlight = idx
+      // Guarantee the selection is visible even if an active group filter
+      // would otherwise hide it (e.g. picked via search or a deep link).
+      refreshVisibility()
 
       tearDownGhost()
       const satrec = satrecs[idx]
@@ -480,12 +521,26 @@ export function SatelliteLayer({ satellites }: SatelliteLayerProps) {
       }
     })
 
+    // React to the constellation quick-filter changing. Recompute membership
+    // and re-evaluate visibility imperatively so the globe never re-renders
+    // through React. requestRender() is needed because requestRenderMode is
+    // on and a filter change may not otherwise trigger a frame.
+    const unsubscribeFilter = useUIStore.subscribe((state, prevState) => {
+      if (state.groupFilter !== prevState.groupFilter) {
+        activeFilter = state.groupFilter
+        computeMatches()
+        refreshVisibility()
+        if (!viewer.isDestroyed()) viewer.scene.requestRender()
+      }
+    })
+
     return () => {
       cancelAnimationFrame(rafId)
       window.clearInterval(intervalId)
       if (telemetryId) window.clearInterval(telemetryId)
       document.removeEventListener('visibilitychange', onVisibility)
       unsubscribe()
+      unsubscribeFilter()
       handler.destroy()
       tearDownGhost()
       clearOrbit()
