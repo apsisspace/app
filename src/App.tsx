@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
 import { ChatPanel } from './components/ChatPanel'
+import { FilterBar } from './components/FilterBar'
 import { Globe } from './components/Globe'
 import { HelpModal } from './components/HelpModal'
 import { Legend } from './components/Legend'
@@ -113,6 +114,10 @@ function App() {
         <div className="pointer-events-none px-3 pb-2">
           {catalog && <SearchBar catalog={catalog} />}
         </div>
+        {/* Constellation quick-filters */}
+        <div className="px-3 pb-2">
+          <FilterBar catalog={catalog} />
+        </div>
       </div>
 
       {/* ── DESKTOP HEADER (≥ 768px) ─────────────────────────────────────
@@ -126,10 +131,11 @@ function App() {
         </p>
       </header>
 
-      {/* ── DESKTOP SEARCH (≥ 768px) ─────────────────────────────────────
-          Centered horizontally at the top. */}
-      <div className="pointer-events-none absolute left-1/2 top-4 hidden -translate-x-1/2 md:block">
+      {/* ── DESKTOP SEARCH + FILTERS (≥ 768px) ───────────────────────────
+          Centered horizontally at the top; filter chips sit under search. */}
+      <div className="pointer-events-none absolute left-1/2 top-4 hidden -translate-x-1/2 flex-col items-center gap-2 md:flex">
         {catalog && <SearchBar catalog={catalog} />}
+        <FilterBar catalog={catalog} />
       </div>
 
       {/* ── SIDE PANEL ───────────────────────────────────────────────────

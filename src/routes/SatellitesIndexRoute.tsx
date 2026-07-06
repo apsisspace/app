@@ -9,6 +9,7 @@
 
 import { Link } from 'wouter'
 import { Helmet } from 'react-helmet-async'
+import { SiteNav, SiteFooter } from '../components/SiteChrome'
 import { useSatelliteCatalog } from '../hooks/useSatelliteCatalog'
 import { NOTABLE_SATELLITES } from '../data/notableSatellites'
 import { tleMetadata } from '../lib/tleMetadata'
@@ -80,22 +81,9 @@ export function SatellitesIndexRoute() {
         <link rel="canonical" href="https://app.apsisspace.com/satellites" />
       </Helmet>
 
-      <nav className="mx-auto flex max-w-[900px] items-center justify-between p-4 font-mono text-[11px] uppercase tracking-widest text-white/50">
-        <Link href="/" className="hover:text-[#00d4ff] transition-colors">
-          &larr; Back to tracker
-        </Link>
-        <Link href="/about" className="hover:text-[#00d4ff] transition-colors">
-          About
-        </Link>
-      </nav>
+      <SiteNav />
 
-      <main className="mx-auto max-w-[900px] px-6 py-8 pb-24 font-mono">
-        <header className="mb-10 select-none">
-          <h1 className="text-xl font-semibold tracking-[0.3em] uppercase text-[#00d4ff]/80">
-            Apsis<span className="text-[#00d4ff]/40"> · </span>Space
-          </h1>
-        </header>
-
+      <main className="mx-auto max-w-[900px] px-6 py-10 font-mono">
         <section className="mb-10">
           <h2 className="mb-3 text-2xl font-light tracking-wide text-white/90">
             Notable Satellites
@@ -154,11 +142,9 @@ export function SatellitesIndexRoute() {
             ))}
           </ul>
         )}
-
-        <footer className="mt-16 border-t border-white/10 pt-8 text-[10px] uppercase tracking-widest text-white/40">
-          &copy; {new Date().getFullYear()} Apsis Space
-        </footer>
       </main>
+
+      <SiteFooter />
     </div>
   )
 }
